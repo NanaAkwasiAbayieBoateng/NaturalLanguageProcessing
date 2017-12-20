@@ -1,0 +1,146 @@
+---
+title: "Text 2"
+output: html_notebook
+author: Nana Boateng
+df_print: paged
+Time: '`r Sys.time()`'
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+---
+
+
+
+```{r}
+library(tidyverse)
+setwd("/Users/nanaakwasiabayieboateng/Documents/memphisclassesbooks/DataMiningscience/Text")
+# # link of data set
+# url = "http://norvig.com/big.txt"
+# # read data (stringsAsFactors=FALSE)
+# biomed = read.table(url, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+# biomed%>%head()
+
+text2<-read.table("Text2.txt")
+
+#text_save=write_lines(text2)
+
+text2%>%head()
+```
+```{r}
+stringi::stri_split(text2,fixed = "<<[^>]*>>")
+```
+
+
+```{r}
+require(RCurl)
+myCsv <- getURL("https://dl.dropboxusercontent.com/u/8272421/test.txt", ssl.verifypeer = FALSE)
+myData <- read.csv(textConnection(myCsv))
+myData
+```
+
+
+
+
+```{r}
+
+#=============================================================================================
+#download and save a text file
+#=============================================================================================
+
+
+TEXTFILE = "shakespeare.txt"
+if (!file.exists(TEXTFILE)) {
+    dir.create(dirname(TEXTFILE), FALSE)
+      downloader::download("http://www.gutenberg.org/cache/epub/100/pg100.txt", destfile = TEXTFILE)
+}
+shakespeare = read_lines(TEXTFILE)
+
+length(shakespeare)
+
+
+#=============================================================================================
+#save a text file
+#=============================================================================================
+
+fileConn<-file("shakespeare.txt")
+
+write_lines(shakespeare, fileConn)
+
+#close(fileConn)
+
+#tmp <- tempfile()
+#text_save=write_lines(shakespeare,path=tmp)
+
+```
+
+
+
+```{r}
+head(shakespeare)
+
+tail(shakespeare)
+
+```
+
+
+There seems to be some header and footer text. We will want to get rid of that! Using a text editor I checked to see how many lines were occupied with metadata and then removed them before concatenating all of the lines into a single long, long, long string.
+
+```{r}
+shakespeare = shakespeare[-(1:173)]
+shakespeare = shakespeare[-(124195:length(shakespeare))]
+
+shakespeare = paste(shakespeare, collapse = " ")
+nchar(shakespeare)
+
+```
+
+<<THIS ELECTRONIC VERSION OF THE COMPLETE WORKS OF WILLIAM
+SHAKESPEARE IS COPYRIGHT 1990-1993 BY WORLD LIBRARY, INC., AND IS
+PROVIDED BY PROJECT GUTENBERG ETEXT OF ILLINOIS BENEDICTINE COLLEGE
+WITH PERMISSION.  ELECTRONIC AND MACHINE READABLE COPIES MAY BE
+DISTRIBUTED SO LONG AS SUCH COPIES (1) ARE FOR YOUR OR OTHERS
+PERSONAL USE ONLY, AND (2) ARE NOT DISTRIBUTED OR USED
+COMMERCIALLY.  PROHIBITED COMMERCIAL DISTRIBUTION INCLUDES BY ANY
+SERVICE THAT CHARGES FOR DOWNLOAD TIME OR FOR MEMBERSHIP.>>
+Obviously that is going to taint the analysis. But it also serves as a convenient marker to divide that long, long, long string into separate documents.
+
+```{r}
+shakespeare = strsplit(shakespeare, "<<[^>]*>>")[[1]]
+length(shakespeare)
+shakespeare 
+```
+
+
+
+
+This left me with a list of 218 documents. On further inspection, some of them appeared to be a little on the short side (in my limited experience, the bard is not known for brevity). As it turns out, the short documents were the dramatis personae for his plays. I removed them as well.
+
+
+```{r}
+(dramatis.personae <- grep("Dramatis Personae", shakespeare, ignore.case = TRUE))
+
+ length(shakespeare)
+
+shakespeare = shakespeare[-dramatis.personae]
+
+length(shakespeare)
+
+```
+
+
+The next task was to convert these documents into a corpus (http://en.wikipedia.org/wiki/Text_corp
+```{r}
+library(tm)
+
+doc.vec<-VectorSource(shakespeare)
+doc.corpus<- Corpus(doc.vec)
+summary(doc.corpus)%>%head()
+
+```
+
+
+There is a lot of information in those documents which is not particularly useful for text mining. So before
+proceeding any further, we will clean things up a bit. First we convert all of the text to lowercase and then
+remove punctuation, numbers and common English stopwords. Possibly the list of English stop words is not
+entirely appropriate for Shakespearean English, but it is a reasonable starting point.
+
+
+

@@ -1,0 +1,314 @@
+---
+title: "Data Science : Sentiment Analysis in R "
+output: html_notebook
+author: Nana Boateng
+df_print: paged
+Time: '`r Sys.time()`'
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+---
+
+
+Welcome back to Data Science 101! Do you have text data? Do you want to figure out whether the opinions expressed in it are positive or negative? Then you've come to the right place! Today, we're going to get you up to speed on sentiment analysis. By the end of this tutorial you will:
+
+Understand what sentiment analysis is and how it works
+Read text from a dataset & tokenize it
+Use a sentiment lexicon to analyze the sentiment of texts
+Visualize the sentiment of text
+If you're the hands-on type, you might want to head directly to the notebook for this tutorial. You can fork it and have your very own version of the code to run, modify and experiment with as we go along.
+
+What is sentiment analysis?
+Sentiment analysis is the computational task of automatically determining what feelings a writer is expressing in text. Sentiment is often framed as a binary distinction (positive vs. negative), but it can also be a more fine-grained, like identifying the specific emotion an author is expressing (like fear, joy or anger).
+
+Sentiment analysis is used for many applications, especially in business intelligence. Some examples of applications for sentiment analysis include:
+
+Analyzing the social media discussion around a certain topic
+Evaluating survey responses
+Determining whether product reviews are positive or negative
+Sentiment analysis is not perfect, and as with any automatic analysis of language, you will have errors in your results. It also cannot tell you why a writer is feeling a certain way. However, it can be useful to quickly summarize some qualities of text, especially if you have so much text that a human reader cannot analyze all of it.
+
+How does it work?
+There are many ways to do sentiment analysis (if you're interested, you can see many of them here). Many approches use the same general idea, however:
+
+Create or find a list of words associated with strongly positive or negative sentiment.
+Count the number of positive and negative words in the text.
+Analyze the mix of positive to negative words. Many positive words and few negative words indicates positive sentiment, while many negative words and few positive words indicates negative sentiment.
+The first step, creating or finding a word list (also called a lexicon), is generally the most time-consuming. While you can often use a lexicon that already exists, if your text is discussing a specific topic you may need to add to or modify it.
+
+"Sick" is an example of a word that can have positive or negative sentiment depending on what it's used to refer to. If you're discussing a pet store that sells a lot of sick animals, the sentiment is probably negative. On the other hand, if you're talking about a skateboarding instructor who taught you how to do a lot of sick flips, the sentiment is probably very positive.
+
+Tutorial
+For this tutorial, we're going to be using R and the Tidytext package to analyze how the sentiment of the State of the Union address, which is a speech given by the President of the United States to a joint session of congress every year. I'm interested in seeing how sentiment has changed over time, from 1989 to 2017, and whether different presidents tend to have more negative or more positive sentiment.
+
+First, let's load in the libraries we'll use and our data.
+```{r}
+# load in the libraries we'll need
+library(tidyverse)
+library(tidytext)
+library(glue)
+library(stringr)
+ 
+# get a list of the files in the input directory
+files <- list.files("../input")
+```
+
+
+
+Let's start with the first file. The first thing we need to do is tokenize it, or break it into individual words. You can learn more about tokenization by following this tutorial.
+
+
+```{r}
+# stick together the path to the file & 1st file name
+fileName <- glue("../input/", files[1], sep = "")
+# get rid of any sneaky trailing spaces
+fileName <- trimws(fileName)
+ 
+# read in the new file
+fileText <- glue(read_file(fileName))
+# remove any dollar signs (they're special characters in R)
+fileText <- gsub("\\$", "", fileText) 
+ 
+# tokenize
+tokens <- data_frame(text = fileText) %>% unnest_tokens(word, text)
+```
+
+
+Now that we have a list of tokens, we need to compare them against a list of words with either positive or negative sentiment.
+
+A list of words associated with a specific sentiment is usually called a "sentiment lexicon".
+
+Because we're using the tidytext package, we actually already have some of these lists. I'm going to be using the "bing" list, which was developed by Bing Liu and co-authors.
+
+```{r}
+# get the sentiment from the first text: 
+tokens %>%
+  inner_join(get_sentiments("bing")) %>% # pull out only sentiment words
+  count(sentiment) %>% # count the # of positive & negative words
+  spread(sentiment, n, fill = 0) %>% # made data wide rather than narrow
+  mutate(sentiment = positive - negative) # # of positive words - # of negative owrds
+```
+
+
+
+So this text has 117 negative polarity words and 240 positive polarity words. This means that there are 123 more positive than negative words in this text.
+
+Now that we know how to get the sentiment for a given text, let's write a function to do this more quickly and easily and then apply that function to every text in our dataset.
+
+
+```{r}
+# write a function that takes the name of a file and returns the # of postive
+# sentiment words, negative sentiment words, and the difference
+GetSentiment <- function(file){
+    # get the file
+    fileName <- glue("../input/", file, sep = "")
+    # get rid of any sneaky trailing spaces
+    fileName <- trimws(fileName)
+ 
+    # read in the new file
+    fileText <- glue(read_file(fileName))
+    # remove any dollar signs (they're special characters in R)
+    fileText <- gsub("\\$", "", fileText) 
+ 
+    # tokenize
+    tokens <- data_frame(text = fileText) %>% unnest_tokens(word, text)
+ 
+    # get the sentiment from the first text: 
+    sentiment <- tokens %>%
+      inner_join(get_sentiments("bing")) %>% # pull out only sentimen words
+      count(sentiment) %>% # count the # of positive & negative words
+      spread(sentiment, n, fill = 0) %>% # made data wide rather than narrow
+      mutate(sentiment = positive - negative) %>% # # of positive words - # of negative owrds
+      mutate(file = file) %>% # add the name of our file
+      mutate(year = as.numeric(str_match(file, "\\d{4}"))) %>% # add the year
+      mutate(president = str_match(file, "(.*?)_")[2]) # add president
+ 
+    # return our sentiment dataframe
+    return(sentiment)
+}
+ 
+# test: should return
+# negative  positive    sentiment   file    year    president
+# 117   240 123 Bush_1989.txt   1989    Bush
+GetSentiment(files[1])
+```
+
+
+
+Now, let's apply our function over every file in our dataset. We'll also need to make sure we can tell the difference between the two presidents named "Bush": Bush and Bush Sr.
+
+
+```{r}
+# file to put our output in
+sentiments <- data_frame()
+ 
+# get the sentiments for each file in our datset
+for(i in files){
+    sentiments <- rbind(sentiments, GetSentiment(i))
+}
+ 
+# disambiguate Bush Sr. and George W. Bush 
+# correct president in applicable rows
+bushSr <- sentiments %>% 
+  filter(president == "Bush") %>% # get rows where the president is named "Bush"...
+  filter(year < 2000) %>% # ...and the year is before 200
+  mutate(president = "Bush Sr.") # and change "Bush" to "Bush Sr."
+ 
+# remove incorrect rows
+sentiments <- anti_join(sentiments, sentiments[sentiments$president == "Bush" & sentiments$year < 2000, ])
+ 
+# add corrected rows to data_frame 
+sentiments <- full_join(sentiments, bushSr)
+```
+
+
+It looks like every State of the Union address in this dataset has an overall positive sentiment (according to this measure). This isn't very surprising: most text, especially formal text, tends to have a positive skew.
+
+Let's plot our sentiment analysis scores to see if we can notice any other patterns. Has sentiment changed over time? What about between presidents?
+
+```{r}
+# plot of sentiment over time & automatically choose a method to model the change
+ggplot(sentiments, aes(x = as.numeric(year), y = sentiment)) + 
+  geom_point(aes(color = president))+ # add points to our plot, color-coded by president
+  geom_smooth(method = "auto") # pick a method & fit a model
+```
+
+
+While it looks like there haven't been any strong trends over time, the line above suggests that presidents from the Democratic party (Clinton and Obama) have a slightly more positive sentiment than presidents from the Republican party (Bush Sr., Bush and Trump). Let's look at individual presidents and see if that pattern holds:
+
+
+```{r}
+# plot of sentiment by president
+ggplot(sentiments, aes(x = president, y = sentiment, color = president)) + 
+  geom_boxplot() # draw a boxplot for each president
+```
+
+It looks like this is a pretty strong pattern. Let's directly compare the two parties to see if there's a reliable difference between them. We'll need to manually label which presidents were Democratic and which were Republican and then test to see if there's a difference in their sentiment scores.
+
+```{r}
+# is the difference between parties significant?
+# get democratic presidents & add party affiliation
+democrats <- sentiments %>%
+    filter(president == c("Clinton","Obama")) %>%
+    mutate(party = "D")
+ 
+# get democratic presidents & party add affiliation
+republicans <- sentiments %>%
+    filter(president != "Clinton" & president != "Obama") %>%
+    mutate(party = "R")
+ 
+# join both
+byParty <- full_join(democrats, republicans)
+ 
+# the difference between the parties is significant
+t.test(democrats$sentiment, republicans$sentiment)
+ 
+# plot sentiment by party
+ggplot(byParty, aes(x = party, y = sentiment, color = party)) + geom_boxplot() + geom_point()
+```
+
+
+So it looks like there is a reliable difference in the sentiment of the State of the Union addresses given by Democratic and Republican presidents, at least from 1989 to 2017.
+
+There a couple things to keep in mind with this analysis, though:
+
+We didn't correct for the length of the documents. It could be that the State of the Union addresses from Democratic presidents have more positive words becuase they are longer rather than becuase they are more positive.
+We're using a general-purpose list of words rather than one specifically designed for analyzing political language. Furthermore, we only used one sentiment analysis list.
+I've written a couple of exercises for you to continue to improve this analysis. You can fork this notebook and work directly from this point without needing to install or download anything.
+
+```{r}
+# Below, I've gotten a list of the 50 most frequent words in this corpus 
+# (removing very common words like "and" or "the") that aren't also in the 
+# "bing" lexicon. Can you tag these words for their sentiment, either positive,
+# negative or neutral, and then use them to augment the "bing" sentiment lexicon?
+ 
+# hint: you may find it easiest to upload your annotated list as a separate
+# dataset and add it to the kernel.
+ 
+# How does this affect your analysis? Do you think it would have had a different 
+# effect if you had annotated 500 words instead? 50,000? Would your new lexicon
+# be helpful in analyzing product reviews? Tweets?
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+# in this code block, we're getting a list of the 100 most frequent words in this
+# corpus that 1) aren't stop words and 2) aren't already in the Bing lexicon
+ 
+# function to get tokens from a file
+fileToTokens <- function(file){
+    # get the file
+    fileName <- glue("../input/", file, sep = "")
+    # get rid of any sneaky trailing spaces
+    fileName <- trimws(fileName)
+ 
+    # read in the new file
+    fileText <- glue(read_file(fileName))
+    # remove any dollar signs (they're special characters in R)
+    fileText <- gsub("\\$", "", fileText) 
+ 
+    # tokenize
+    tokens <- data_frame(text = fileText) %>% unnest_tokens(word, text)
+    return(tokens)
+}
+ 
+# empty data_frame to save our data in
+allTokens <- NULL
+ 
+# get the tokens in each file
+for(i in files){
+    allTokens <- rbind(allTokens, fileToTokens(i))
+}
+ 
+# get words already in the Bing sentiment dictionary
+bingWords <- get_sentiments("bing")[,1]
+ 
+# get the top 100 most frequent words, excluding stop words
+# and word already in the "bing" lexicon
+top100Words <- allTokens %>% 
+    anti_join(stop_words) %>% # remove stop words
+    anti_join(bingWords) %>% # remove words in the bing lexicon
+    count(word, sort = T) %>% # sort by frequency
+    top_n(100) # get the top 100 terms
+ 
+# Save out the file (it will show up under "output") so you can download it
+# and annotate it in a different program (if you like)
+write.csv(top100Words, "top100Words.csv")
+```
+

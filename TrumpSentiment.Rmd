@@ -1,0 +1,355 @@
+---
+title: "Sentiment  Analysis of Trump's Tweets"
+output: html_notebook
+author: Nana Boateng
+df_print: paged
+Time: '`r Sys.time()`'
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+---
+
+
+
+#### Introduction
+There is a website which stores all of Donald Trumps Tweet created by Brendan Brown. The data for this analysis was obtained from the website with this link [here](http://www.trumptwitterarchive.com/data/realdonaldtrump/).
+
+```{r setup,include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      out.width ="100%",
+                      message = FALSE,
+                      fig.align = 'default', 
+                      warning = FALSE, 
+                      fig.cap ="Fig. 30", 
+                      out.width="100%")
+
+```
+
+
+```{r}
+library(tidyverse)
+library(lubridate)
+
+url <- 'http://www.trumptwitterarchive.com/data/realdonaldtrump/%s.json'
+all_tweets <- map(2009:2017, ~sprintf(url, .x)) %>%
+  #alternatively
+  #paste0("http://www.trumptwitterarchive.com/data/realdonaldtrump/",2009:2017,".json")
+  map_df(jsonlite::fromJSON, simplifyDataFrame = TRUE) %>%
+  mutate(created_at = parse_date_time(created_at, "a b! d! H!:M!:S! z!* Y!")) %>%
+  tbl_df()
+
+all_tweets%>%head()
+```
+
+
+#### Devices over time
+
+Trump's tweets became and has being a subject of much public interest from the time  he decided to contest the republican presidential nomination and subsequently the general election. Journalist  particularly interested would want to distinguish between  tweets by himself from those by his staff. The analysis starts with tweets since 2009.
+
+```{r}
+library(forcats)
+library(scales)
+library(viridis)
+# forcats::fct_lump()  lump source into 5 groups
+theme_set(theme_bw())
+all_tweets %>%
+  mutate(source = forcats::fct_lump(source, 5)) %>%
+  count(month = round_date(created_at, "month"), source) %>%
+complete(month, source, fill = list(n = 0)) %>%  #fill missing n with 0 dplyr::complete
+  mutate(source = reorder(source, -n, sum)) %>%
+  group_by(month) %>%
+  mutate(percent = n / sum(n),
+         maximum = cumsum(percent),
+         minimum = lag(maximum, 1, 0)) %>%
+ggplot(aes(month, ymin = minimum, ymax = maximum, fill = source)) +
+geom_ribbon()+
+  scale_y_continuous(labels = percent_format()) +
+  labs(x = "Time",
+       y = "% of Trump's tweets",
+       fill = "Source",
+       title = "Source of @realDonaldTrump tweets over time",
+       subtitle = "Summarized by month")+
+  scale_fill_manual(values=viridis_pal(option = "A")(6))
+
+
+#geom_area
+
+library(forcats)
+library(scales)
+# forcats::fct_lump()  lump source into 5 groups
+all_tweets %>%
+  mutate(source = forcats::fct_lump(source, 5)) %>%
+  count(month = round_date(created_at, "month"), source) %>%
+complete(month, source, fill = list(n = 0)) %>%  #fill missing n with 0 dplyr::complete
+  mutate(source = reorder(source, -n, sum)) %>%
+  group_by(month) %>%
+  mutate(percent = n / sum(n),
+         maximum = cumsum(percent),
+         minimum = lag(maximum, 1, 0)) %>%
+
+  ggplot(aes(month, percent, fill = source)) +
+ 
+  geom_area(position = "identity", alpha = 0.7)+
+  scale_y_continuous(labels = percent_format()) +
+  labs(x = "Time",
+       y = "% of Trump's tweets",
+       fill = "Source",
+       title = "Source of @realDonaldTrump tweets over time",
+       subtitle = "Summarized by month")+
+  scale_fill_manual(values=viridis_pal(option = "B")(6))
+```
+
+
+
+
+
+Starting from 2009 to late 2011,all  of Trump’s tweets  came from the Web Client. In 2012 Trump mostly tweeted from TweetDeck , TwitLonger Beta and Twitter Wed client. The android tweets start in early 2013 and continued until he switched to an android  at the end of the first quarter of 2017. An iphone was used in tweets afterwards.
+
+
+
+```{r}
+library(stringr)
+
+all_tweets %>%
+  mutate(source = fct_lump(source, 5)) %>%
+  filter(!str_detect(text, "^(\"|RT)")) %>% #remove  retweets
+  group_by(source, year = year(created_at)) %>%
+  summarize(tweets = n(),
+            hashtag = sum(str_detect(str_to_lower(text), "#[a-z]|http"))) %>%
+  ungroup() %>%
+  mutate(source = reorder(source, -tweets, sum)) %>%
+  filter(tweets >= 1) %>%
+  ggplot(aes(year, hashtag / tweets, color = source)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = seq(2009, 2017, 2)) +
+  scale_y_continuous(labels = percent_format()) +
+  facet_wrap(~ source) +
+  scale_fill_manual(values=viridis_pal(option = "B")(6))+
+  labs(x = "Time",
+       y = "% of Trump's tweets with a hashtag, picture or link",
+       title = "Tweets with a hashtag, picture or link by device",
+       subtitle = "")
+```
+
+
+
+
+
+#### Trump  Barack Obama Tweet
+
+Trumps tweets about Obama spiked between 2011 and 2013.This can be attributed Obama's roast of him at the 2011 white house correspondence dinner.
+
+```{r}
+all_tweets %>%
+  filter(!str_detect(text, "^(\"|RT)")) %>%
+  group_by(month = round_date(created_at, "month")) %>%
+  summarize(tweets = n(),
+            hashtag = sum(str_detect(str_to_lower(text), "obama")),
+            percent = hashtag / tweets) %>%
+  ungroup() %>%
+  filter(tweets >= 10) %>%
+  ggplot(aes(as.Date(month), percent)) +
+  geom_line() +
+  geom_point() +
+  geom_vline(xintercept = as.integer(as.Date("2011-04-30")), color = "#FDE725FF", lty = 2) +
+  geom_vline(xintercept = as.integer(as.Date("2012-11-06")), color = "#440154FF", lty = 2) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(x = "Time",
+       y = "% of Trump's tweets that mention Obama",
+       subtitle = paste0("Summarized by month; only months containing at least 10 tweets.\n",
+                         "Yellow line is White House Correspondent's Dinner, purple is 2012 election."),
+       title = "Trump's tweets mentioning Obama")
+```
+
+
+
+```{r}
+all_tweets %>%
+  filter(!str_detect(text, "^(\"|RT)")) %>%
+  group_by(month = round_date(created_at, "month")) %>%
+  summarize(tweets = n(),
+            hashtag = sum(str_detect(str_to_lower(text), "radical islamic terrorism")),
+            percent = hashtag / tweets) %>%
+  ungroup() %>%
+  filter(tweets >= 10) %>%
+  ggplot(aes(as.Date(month), percent)) +
+  geom_line() +
+  geom_point() +
+  geom_vline(xintercept = as.integer(as.Date("2011-04-30")), color = "#FDE725FF", lty = 2) +
+  geom_vline(xintercept = as.integer(as.Date("2012-11-06")), color = "#440154FF", lty = 2) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(x = "Time",
+       y = "% of Trump's tweets that mention Islam",
+       subtitle = paste0("Summarized by month; only months containing at least 10 tweets.\n",
+                         " "),
+       title = "Trump's tweets mentioning radical islamic terrorism")
+```
+
+
+
+```{r}
+all_tweets %>%
+  filter(!str_detect(text, "^(\"|RT)")) %>%
+  group_by(month = round_date(created_at, "month")) %>%
+  summarize(tweets = n(),
+            hashtag = sum(str_detect(str_to_lower(text), " terrorist")),
+            percent = hashtag / tweets) %>%
+  ungroup() %>%
+  #filter(tweets >= 1) %>%
+  ggplot(aes(as.Date(month), percent)) +
+  geom_line() +
+  geom_point() +
+  geom_vline(xintercept = as.integer(as.Date("2011-04-30")), color = "#FDE725FF", lty = 2) +
+  geom_vline(xintercept = as.integer(as.Date("2012-11-06")), color = "#440154FF", lty = 2) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(x = "Time",
+       y = "% of Trump's tweets that mention Islam",
+       subtitle = paste0("Summarized by month; only months containing at least 10 tweets.\n",
+                         " "),
+       title = "Trump's tweets mentioning  terrorism")
+```
+
+
+
+
+```{r}
+between <- all_tweets %>%
+  filter(created_at >= "2011-04-30", created_at < "2012-11-07") %>%
+  mutate(obama = str_detect(str_to_lower(text), "obama"))
+
+percent_mentioned <- mean(between$obama)
+percent_mentioned
+```
+
+Between July 2011 and November 2012 (Obama’s re-election), a full 32.3%% of Trump’s tweets mentioned Obama by name.
+
+#### Examining Trumps Sentiment over Time
+
+```{r}
+library(tidytext)
+
+all_tweet_words <- all_tweets %>%
+  mutate(text = str_replace_all(text, "https?://t.co/[A-Za-z\\d]+|&amp;", "")) %>%
+  filter(!str_detect(text, "^(\"|RT)")) %>%
+  unnest_tokens(word, text, token = "regex") %>%
+  filter(!word %in% stop_words$word, str_detect(word, "[a-z]"))
+
+
+# Alternatively
+#data("stop_words")
+#cleaned_words <- all_tweet_words %>%
+#  anti_join(stop_words)
+```
+
+
+
+
+```{r}
+all_tweet_words %>%
+  inner_join(get_sentiments("afinn")) %>%
+  group_by(month = round_date(created_at, "month")) %>%
+  summarize(average_sentiment = mean(score), words = n()) %>%
+  filter(words >= 10) %>%
+  ggplot(aes(month, average_sentiment)) +
+  geom_line() +
+  geom_hline(color = "red", lty = 2, yintercept = 0) +
+  labs(x = "Time",
+       y = "Average AFINN sentiment score",
+       title = "@realDonaldTrump sentiment over time",
+       subtitle = "Dashed line represents a 'neutral' sentiment average. Only months with at least 10 words present in the AFINN lexicon")
+
+```
+
+Trumps tweets about Obama were largely positive before 2011. After 2011, his tweets oscillated between negatives and positives.
+
+```{r}
+library(stringr)
+
+campaign_tweets <- all_tweets %>%
+  filter(created_at >= "2015-06-16") %>%
+  mutate(source = str_replace(source, "Twitter for ", "")) %>%
+  filter(!str_detect(text, "^(\"|RT)")) #remove retweets
+
+tweet_words <- all_tweet_words %>%
+    filter(created_at >= "2015-06-16")
+
+```
+
+
+#### Frequency of Words before and After 2016 Election
+
+```{r}
+ratios <- tweet_words %>%
+  mutate(phase = ifelse(created_at >= "2016-12-07", "after", "before")) %>%
+  count(word, phase) %>%
+  spread(phase, n, fill = 0) %>%
+  mutate(total = before + after) %>%
+  mutate_at(vars(before, after), funs((. + 1) / sum(. + 1))) %>%
+  mutate(ratio = after / before) %>%
+  arrange(desc(ratio))
+
+ratios%>%head()
+
+```
+
+Some of the words used mostly before the election included “fake ” and “cuts”. Trumps attack on the media as fake news is well documented.
+
+
+#### Most Retweeted Words
+
+```{r}
+word_summary <- tweet_words %>%
+  group_by(word)%>%
+  summarize(total = n(),
+            median_retweets = median(retweet_count)) 
+
+word_summary%>%head() 
+
+
+```
+
+
+
+
+```{r}
+word_summary %>%
+  filter(total >= 25) %>%
+  arrange(desc(median_retweets)) %>%
+  slice(c(1:20, seq(n() - 19, n()))) %>% #get the first 20 and last 20
+  mutate(type = rep(c("Most retweets", "Fewest retweets"), each = 20)) %>%
+  mutate(word = reorder(word, median_retweets)) %>%
+  ggplot(aes(word, median_retweets,fill=type)) +
+  scale_fill_manual(values=viridis_pal(option = "D")(2))+
+  geom_col() +
+  labs(x = "",
+       y = "Median # of retweets for tweets containing this word",
+       title = "Words that led to many or few retweets") +
+  coord_flip() +
+  facet_wrap(~ type, ncol = 1, scales = "free_y")
+```
+
+Some of Trump’s most retweeted topics include hillary clinton, obama, country and crooked.His fewest tweets included meeting,obamacare and puerto rico.
+
+
+
+```{r}
+all_tweets %>%
+  group_by(month = round_date(created_at, "month")) %>%
+  summarize(median_retweets = median(retweet_count), number = n()) %>%
+  filter(number >= 10) %>%
+  ggplot(aes(month, median_retweets)) +
+  geom_line() +
+  scale_y_continuous(labels = comma_format()) +
+  labs(x = "Time",
+       y = "Median # of retweets")
+```
+
+Trumps retweets skyrocketed after the elections in rowards the end of 2016.
+
+
+
+
+
+
+

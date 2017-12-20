@@ -1,0 +1,866 @@
+---
+title: "Scrapping Data in R"
+output: html_notebook
+author: Nana Boateng
+df_print: paged
+Time: '`r Sys.time()`'
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+---
+
+
+
+
+```{r setup,include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      out.width ="100%",
+                      message = FALSE,
+                      fig.align = 'default', 
+                      warning = FALSE, 
+                      fig.cap ="Fig. 30", 
+                      out.width="100%")
+
+```
+
+
+** Introduction  Web Scraping **
+Web scraping is a technique for converting the data present in unstructured format (HTML tags) over the web to the structured format which can easily be accessed and used.
+
+
+
+Most of the data available over the web is not readily available. It is present in an unstructured format (HTML format) and is not downloadable. Therefore, it requires knowledge & expertise to use this data.
+
+
+How many times have his papers been cited
+We can locate useful data based on their CSS selectors, especially when the webpage uses semantic tag attributes. Let's use [selectorgadget] (http://selectorgadget.com/) to find out which css selector matches the "cited by". SelectGadget can be added an extension in  Google chrome. It is shown as a magnifying glass.
+column.
+Use read_html() to parse the html page.
+
+```{r}
+pacman::p_load(tidyverse,tidytext,viridis,rvest)
+```
+
+
+```{r}
+page <- read_html("https://scholar.google.com/citations?user=JgDKULMAAAAJ")
+page
+```
+
+Specify the css selector in html_nodes() and extract the text with html_text(). Finally, change the string to
+numeric using as.numeric().
+
+```{r}
+
+citations = page%>% html_nodes(".gsc_a_t")%>%html_text()
+citations[1:5]
+```
+
+
+```{r}
+FCAglassdoor <- read_html("https://www.glassdoor.com/Reviews/FCA-Fiat-Chrysler-Automobiles-Reviews-E149.htm")
+FCAglassdoor1 = FCAglassdoor%>% html_nodes(".hreview")%>%html_text()
+FCAglassdoor1%>%head()
+
+FCAindeed <- read_html("https://www.indeed.com/cmp/Fca-Group-LLC/reviews")
+FCAindeed1 = FCAindeed%>% html_nodes("#cmp-content")%>%html_text()
+FCAindeed1[[1]][[1]]
+```
+
+```{r}
+#Data-Preprocessing: removing '\n'
+FCAindeed2<-gsub("\n","",FCAglassdoor1)
+
+
+
+#remove all round brackets
+FCAindeed2<-FCAindeed2%>%str_replace_all("\\(|\\)", "")
+
+#remove all \\
+FCAindeed2<-FCAindeed2%>%str_replace_all("\\\\", "")
+
+
+#remove all non words and non numbers
+#FCAindeed2<-FCAindeed2%>%str_replace_all("[^A-Za-z0-9]", "")
+
+#remove all • 
+FCAindeed2<-FCAindeed2%>%str_replace_all("\\•  ", "")
+
+#remove all & 
+FCAindeed2<-FCAindeed2%>%str_replace_all("\\ & ", "")
+
+#remove all  non printable words
+FCAindeed2<-FCAindeed2%>%str_replace_all("[^[:print:]]", "")
+
+FCAindeed2<-FCAindeed2%>%gsub(pattern = "\\ /", replacement = "")
+#FCAindeed2<-FCAindeed2%>%stringi::stri_unescape_unicode()
+
+FCAindeed2
+
+```
+
+
+
+
+```{r}
+n=4
+
+#The reviews has 155 pages,thus n=155
+
+FCA_urls <- paste0("https://www.glassdoor.com/Reviews/FCA-Fiat-Chrysler-Automobiles-Reviews-E149_P",seq(2, n), ".htm")
+FCA_urls<-c("https://www.glassdoor.com/Reviews/FCA-Fiat-Chrysler-Automobiles-Reviews-E149.htm",FCA_urls)
+
+
+FCA_html <- FCA_urls %>%
+    map_chr(~ read_html(.) %>% html_node(".hreview")%>%html_text())
+
+FCA_html[[1]]
+
+```
+
+```{r}
+get_sentiments(lexicon = "nrc")%>%
+    count(sentiment, sort = TRUE)
+```
+Convert the  text data to dataframe.
+```{r}
+GlassdoorPages <- data_frame(page = seq(1, n),
+                      text = c(FCA_html))
+
+GlassdoorPages
+```
+
+Now we have the letters, and can convert this to a tidy text format.
+
+```{r}
+tidy_FCA <- GlassdoorPages %>%
+    unnest_tokens(word, text) %>%
+  dplyr::summarise(n=n()) 
+tidy_FCA
+
+
+tidy_FCA <- GlassdoorPages %>%
+    unnest_tokens(word, text) %>%
+   summary(n=count()) 
+tidy_FCA
+
+tidy_FCA <- GlassdoorPages %>%
+    unnest_tokens(word, text) %>%
+    add_count(page) %>%
+    dplyr::rename(page_total = n)
+
+
+
+#remove stop words
+
+data("stop_words")
+tidy_FCA <- tidy_FCA %>%
+  anti_join(stop_words)
+
+
+tidy_FCA%>%head()
+
+```
+
+Next, let’s implement the sentiment analysis.
+
+
+```{r}
+FCA_sentiment <- tidy_FCA %>%
+    inner_join(get_sentiments("nrc"))
+
+FCA_sentiment%>%head()
+```
+
+Now we have all we need to see the relative changes in these sentiments over the years.
+
+```{r}
+theme_set(theme_bw())
+
+#Alternatively
+#FCA_sentiment%>%group_by(page, page_total, sentiment)%>%count()
+
+FCA_sentiment %>%
+    count(page, page_total, sentiment) %>%
+    filter(sentiment %in% c("positive", "negative", 
+                            "joy", "trust","fear","sadness"))%>%
+    mutate(sentiment = as.factor(sentiment)) %>%
+    #ggplot(aes(page, n / page_total, fill = sentiment)) +
+     ggplot(aes(page, n / sum(n), fill = sentiment)) +
+    geom_area(position = "identity", alpha = 0.5) +
+    labs(y = "Relative frequency", x = "Page",
+         title = "Sentiment analysis of FCA Glassdoor Reviews",
+         subtitle = "Using the nrc lexicon")+theme_bw()+
+ scale_fill_manual(values=viridis_pal(option = "D")(6))+
+   scale_y_continuous(labels = scales::percent)
+
+
+
+```
+
+
+
+```{r}
+FCA_sentiment %>%
+    count(page, page_total, sentiment) %>%
+  #  filter(sentiment %in% c("positive", "negative",  "joy", "trust","fear","sadness"))%>%
+  mutate(sentiment = forcats::fct_lump(sentiment, 6))%>%
+    #mutate(sentiment = as.factor(sentiment)) %>%
+    ggplot(aes(page, n / page_total, fill = sentiment)) +
+     #ggplot(aes(page, n / sum(n), fill = sentiment)) +
+    geom_area(position = "identity", alpha = 0.5) +
+    labs(y = "Relative frequency", x = "Page",
+         title = "Sentiment analysis of FCA Glassdoor Reviews",
+         subtitle = "Using the nrc lexicon")+theme_bw()+
+ scale_fill_manual(values=viridis_pal(option = "D")(7))+
+   scale_y_continuous(labels = scales::percent)
+
+
+```
+
+
+
+
+```{r}
+tidy_FCA %>%
+  inner_join(get_sentiments("afinn")) %>%
+  group_by(page) %>%
+  summarize(average_sentiment = mean(score), words = n()) %>%
+  #filter(words >= 10) %>%
+  ggplot(aes(page, average_sentiment)) +
+  geom_line() +
+  geom_hline(color = "red", lty = 2, yintercept = 0) +
+labs(y = "Average AFINN sentiment score", x = "Page",
+         title = "Sentiment analysis of FCA Glassdoor Reviews",
+         subtitle = "Using the affin lexicon")
+```
+
+
+
+```{r}
+FCA_sentiment %>%
+    count(sentiment, word) %>%
+    filter(sentiment %in% c("positive", "negative", 
+                            "joy", "trust","fear","sadness")) %>%
+    group_by(sentiment) %>%
+    top_n(10) %>%
+    ungroup %>%
+    mutate(word = reorder(word, n)) %>%
+   mutate(sentiment = as.factor(sentiment))  %>%
+    ggplot(aes(word, n, fill = sentiment)) +
+    geom_bar(alpha = 0.8, show.legend = FALSE,stat = "identity") +
+    coord_flip() +
+    scale_y_continuous(expand = c(0,0)) +
+    facet_wrap(~sentiment, scales = "free") +
+   labs(y = "Total number of occurrences", x = "",
+         title = "Sentiment analysis of FCA Glassdoor Reviews",
+         subtitle = "Using the nrc lexicon")+theme_bw()+
+scale_fill_manual(values=viridis_pal(option = "D")(6))
+
+ # # change text into italics
+ #        theme(strip.text = element_text(face = "italic")) +
+ #  # strip horizontal  axis labels
+ #        theme(axis.title.x=element_blank()) +
+ #        theme(axis.ticks.x=element_blank()) +
+ #        theme(axis.text.x=element_blank())
+   
+```
+
+
+
+### Plot without viridis package
+
+```{r}
+
+
+
+
+FCA_sentiment %>%
+    count(page, page_total, sentiment) %>%
+    filter(sentiment %in% c("positive", "negative", 
+                            "joy", "trust","fear","sadness"))%>%
+     mutate(sentiment = factor(sentiment, levels = c("negative",
+                                                    "positive",
+                                                    "joy", "trust","fear","sadness"))) %>%
+    ggplot(aes(page, n / page_total, fill = sentiment)) +
+    geom_area(position = "identity", alpha = 0.5) +
+    labs(y = "Relative frequency", x = NULL,
+         title = "Sentiment analysis of FCA Glassdoor Reviews",
+         subtitle = "Using the nrc")+theme_bw()
+
+```
+
+#### Using bing Lexicon
+
+```{r}
+FCA_sentiment <- tidy_FCA %>%
+    inner_join(get_sentiments("bing"))
+
+
+FCA_sentiment %>%
+    count(page, page_total, sentiment)%>%
+    mutate(sentiment = as.factor(sentiment))%>%
+    ggplot(aes(page, n / page_total, fill = sentiment)) +
+    geom_area(position = "identity", alpha = 0.5) +
+    labs(y = "Relative frequency", x = "Page",
+         title = "Sentiment analysis of FCA Glassdoor Reviews",
+         subtitle = "Using the nrc")+theme_bw()+
+# scale_fill_manual(values=viridis_pal(option = "plasma")(2))+
+   scale_y_continuous(labels = scales::percent)
+```
+
+
+```{r}
+FCA_sentiment %>%
+    count(sentiment, word) %>%
+    group_by(sentiment) %>%
+    top_n(15) %>%
+    ungroup %>%
+    mutate(word = reorder(word, n)) %>%
+   mutate(sentiment = as.factor(sentiment))  %>%
+    ggplot(aes(word, n, fill = sentiment)) +
+    geom_col(alpha = 0.8, show.legend = FALSE) +
+    coord_flip() +
+    scale_y_continuous(expand = c(0,0)) +
+    facet_wrap(~sentiment) +
+   labs(y = "Total number of occurrences", x = "",
+         title = "Sentiment analysis of FCA Glassdoor Reviews",
+         subtitle = "Using the bing lexicon")+
+#scale_fill_manual(values=viridis_pal(option = "D")(8))+
+ scale_fill_viridis(end = 0.75, discrete=TRUE, direction = -1) +
+        #scale_x_discrete(expand=c(0.02,0)) +
+       # theme(strip.text=element_text(hjust=0)) +
+  # change text into italics
+       # theme(strip.text = element_text(face = "italic")) +
+  # strip horizontal  axis labels
+        theme(axis.title.x=element_blank()) +
+        theme(axis.ticks.x=element_blank()) +
+        theme(axis.text.x=element_blank())+
+  theme_minimal(base_size = 13)
+```
+
+
+```{r}
+bing_word_counts <-tidy_FCA %>%
+  inner_join(bing) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+bing_word_counts%>%head()
+
+bing_word_counts %>%
+ # filter(n > 1) %>%
+  mutate(n = if_else(sentiment == "negative", -n, n)) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Contribution to sentiment")+
+#scale_fill_manual(values=viridis_pal(option = "D")(2))
+ scale_fill_viridis(end = 0.85, discrete=TRUE, direction = 1)
+
+```
+
+
+
+```{r}
+n=4
+
+FCA=list()
+
+for (i in 2:n){
+  
+FCA[[1]]=read_html("https://www.glassdoor.com/Reviews/FCA-Fiat-Chrysler-Automobiles-Reviews-E149.htm")%>% html_nodes(".hreview")%>%html_text(trim = TRUE)
+  
+FCA[[i]]=read_html(paste("https://www.glassdoor.com/Reviews/FCA-Fiat-Chrysler-Automobiles-Reviews-E149_P",i,".htm",sep = ""))%>% html_nodes(".hreview")%>%html_text(trim = TRUE)
+  
+}
+
+
+
+
+
+
+```
+
+
+```{r}
+
+
+#FCA1<-FCA%>%map_chr(~ html_text(.))
+
+#FCAglassdoor%>% html_nodes(".hreview")
+
+
+
+#sapply(FCA, html_nodes,css=".hreview")%>%unlist()
+
+#FCA[[1]]%>% html_nodes(".hreview")%>%html_text()
+
+data.frame(FCA)
+
+```
+
+
+
+
+#### Scrapping PDF Files
+
+```{r}
+pacman::p_load(pdftools)
+
+txt <- pdf_text("/Users/nanaakwasiabayieboateng/Documents/animal_farm.pdf")
+
+txt[1:2]
+
+```
+
+```{r}
+# first page text
+cat(txt[1])
+
+# second page text
+cat(txt[2])
+```
+
+```{r}
+# Table of contents
+toc <- pdf_toc("https://arxiv.org/pdf/1403.2805.pdf%22,%20%221403.2805.pdf")
+
+#toc <- pdf_toc("/Users/nanaakwasiabayieboateng/Documents/Resume-Nana.pdf")
+# Show as JSON
+json<-jsonlite::toJSON(toc, auto_unbox = TRUE, pretty = TRUE)
+
+# Author, version, etc
+info <- pdf_info("https://arxiv.org/pdf/1403.2805.pdf%22,%20%221403.2805.pdf")
+
+# Table with fonts
+fonts <- pdf_fonts("https://arxiv.org/pdf/1403.2805.pdf%22,%20%221403.2805.pdf")
+
+```
+
+
+
+```{r}
+
+# Author, version, etc
+info <- pdf_info("/Users/nanaakwasiabayieboateng/Documents/Resume-Nana.pdf")
+
+# Table with fonts
+fonts <- pdf_fonts("/Users/nanaakwasiabayieboateng/Documents/Resume-Nana.pdf")
+info
+fonts
+```
+
+```{r}
+library("tabulizer")
+f <- system.file("examples", "data.pdf", package = "tabulizer")
+out1 <- extract_tables(f)
+str(out1)
+
+out2 <- extract_tables(f, pages = 1, guess = FALSE, method = "data.frame")
+str(out2)
+ 
+```
+
+### Scrapping Wikipeadia Tables
+
+```{r}
+df.oil <- read_html("https://en.wikipedia.org/wiki/List_of_countries_by_oil_production") %>%
+  html_nodes("table") %>%
+  .[[1]] %>%
+  html_table()
+```
+
+
+
+
+
+
+One enhancement in this release is the addition of the Loughran and McDonald sentiment lexicon of words specific to financial reporting. Sentiment lexicons are lists of words that are used to assess the emotion or opinion content of text by adding up the sentiment scores of individual words within that text;
+```{r}
+library(rvest)
+library(pdftools)
+
+
+
+get_sentiments("loughran") %>%
+    count(sentiment, sort = TRUE)
+
+
+urls_oldest <- paste0("http://www.berkshirehathaway.com/letters/", 
+                     seq(1977, 1997), ".html")
+html_urls <- c(urls_oldest,
+               "http://www.berkshirehathaway.com/letters/1998htm.html",
+               "http://www.berkshirehathaway.com/letters/1999htm.html",
+               "http://www.berkshirehathaway.com/2000ar/2000letter.html",
+               "http://www.berkshirehathaway.com/2001ar/2001letter.html")
+
+letters_html <- html_urls %>%
+    map_chr(~ read_html(.) %>% 
+                html_text())
+letters_html[1]
+
+
+
+```
+
+```{r}
+
+
+urls_newest <- paste0("http://www.berkshirehathaway.com/letters/", 
+                      seq(2003, 2016), "ltr.pdf")
+
+pdf_urls <- c("http://www.berkshirehathaway.com/letters/2002pdf.pdf",
+              urls_newest)
+
+letters_pdf <- pdf_urls %>%
+    map_chr(~ pdf_text(.) %>% paste(collapse = " "))
+
+letters <- data_frame(year = seq(1977, 2016),
+                      text = c(letters_html, letters_pdf))
+```
+
+###  Lexicons
+**AFINN** is a list of English words rated for valence with an integer
+between minus five (negative) and plus five (positive). The words have
+been manually labeled by Finn Årup Nielsen in 2009-2011. The file
+is tab-separated. There are two versions:
+
+**Bing Liu** maintains and freely distributes a sentiment lexicon consisting of lists of strings.
+
+
+Positive words: 2006
+Negative words: 4783
+Useful properties: includes mis-spellings, morphological variants, slang, and social-media mark-up
+
+ the tidytext package contains three general purpose English sentiment lexicons. The positive or negative meaning of a word can depend on its context, though. A word like “risk” has a negative meaning in most general contexts but may be more neutral for financial reporting. Context-specific sentiment lexicons like the **Loughran-McDonald** dictionary provide a way to deal with this.
+
+This financial lexicon labels words with six possible sentiments.
+
+
+**NRC Word-Emotion Association Lexicon (aka EmoLex)**
+
+The NRC Emotion Lexicon is a list of English words and their associations with eight basic emotions (anger, fear, anticipation, trust, surprise, sadness, joy, and disgust) and two sentiments (negative and positive). The annotations were manually done by crowdsourcing. 
+
+
+
+
+An example
+I recently saw a sentiment analysis by Michael Toth of Warren Buffett’s letters to shareholders. It’s a super interesting analysis, done well, but we can see from some of the plots in that analysis that the specifically financial nature of these documents would make a financial sentiment lexicon a great choice. Let’s scrape the letters from Berkshire Hathaway, Warren Buffett’s company, and then implement a sentiment analysis using this new lexicon.
+```{r}
+get_sentiments(lexicon = c("afinn", "bing", "nrc", "loughran"))
+
+get_sentiments()
+
+get_sentiments("loughran") %>%
+    count(sentiment, sort = TRUE)
+
+```
+
+
+```{r}
+
+letters
+tidy_letters <- letters %>%
+    unnest_tokens(word, text) %>%
+    add_count(year) %>%
+    rename(year_total = n)
+
+tidy_letters
+
+letter_sentiment <- tidy_letters %>%
+    inner_join(get_sentiments("loughran"))
+
+letter_sentiment
+
+
+letter_sentiment %>%
+    count(year, year_total, sentiment) %>%
+    filter(sentiment %in% c("positive", "negative", 
+                            "uncertainty", "litigious")) %>%
+    mutate(sentiment = factor(sentiment, levels = c("negative",
+                                                    "positive",
+                                                    "uncertainty",
+                                                    "litigious"))) %>%
+    ggplot(aes(year, n / year_total, fill = sentiment)) +
+    geom_area(position = "identity", alpha = 0.5) +
+    labs(y = "Relative frequency", x = NULL,
+         title = "Sentiment analysis of Warren Buffett's shareholder letters",
+         subtitle = "Using the Loughran-McDonald lexicon")
+```
+We see negative sentiment spiking, higher than positive sentiment, during the financial upheaval of 2008, the collapse of the dot-com bubble in the early 2000s, and the recession of the 1990s. Overall, though, notice that the balance of positive to negative sentiment is not as skewed to positive as when you use one of the general purpose sentiment lexicons.
+
+This happens because of the words that are driving the sentiment score in these different cases. When using the financial sentiment lexicon, the words have specifically been chosen for a financial context. What words are driving these sentiment scores?
+
+```{r}
+letter_sentiment %>%
+    count(sentiment, word) %>%
+    filter(sentiment %in% c("positive", "negative", 
+                            "uncertainty", "litigious")) %>%
+    group_by(sentiment) %>%
+    top_n(15) %>%
+    ungroup %>%
+    mutate(word = reorder(word, n)) %>%
+    mutate(sentiment = factor(sentiment, levels = c("negative",
+                                                    "positive",
+                                                    "uncertainty",
+                                                    "litigious"))) %>%
+    ggplot(aes(word, n, fill = sentiment)) +
+    geom_col(alpha = 0.8, show.legend = FALSE) +
+    coord_flip() +
+    scale_y_continuous(expand = c(0,0)) +
+    facet_wrap(~sentiment, scales = "free") +
+    labs(x = NULL, y = "Total number of occurrences",
+         title = "Words driving sentiment scores in Warren Buffett's shareholder letters",
+         subtitle = "From the Loughran-McDonald lexicon")
+```
+
+
+### bigrquery
+The bigrquery packages provides an R interface to Google BigQuery. It makes it easy to retrieve metadata about your projects, datasets, tables and jobs, and provides a convenient wrapper for working with bigquery from R.
+
+### Authentication
+The first time you use bigrquery in a session, it will ask you to authorize bigrquery in the browser. This gives bigrquery the credentials to access data on your behalf. By default, bigrquery picks up httr's policy of caching per-working-directory credentials in .httr-oauth.
+
+Note that bigrquery requests permission to modify your data; in general, the only data created or modified by bigrquery are the temporary tables created as query results, unless you explicitly modify your own data (say by calling delete_table() or insert_upload_job()).
+```{r}
+pacman::p_load(bigrquery)
+
+
+#AUTH:AIzaSyCU9XhK6VmHcmrUjaU8xwRm-0rWleEuwiE
+#client id::195397749877-rs4mud4m19m8qe0j525828nj6r1h1e0i.apps.googleusercontent.com
+#put your project ID here::bigqueryproject1-189300
+#secret::OPnLFhJzuq9X_8JJirF3vINd
+```
+
+
+
+```{r}
+library(bigrquery)
+project <- "bigqueryproject1-189300" # put your project ID here
+sql <- "SELECT year, month, day, weight_pounds FROM [publicdata:samples.natality] LIMIT 5"
+query_exec(sql, project = project)
+
+
+
+```
+
+
+```{r}
+#devtools::install_github("rstats-db/bigrquery")
+
+# install.packages('devtools') devtools::install_github("rstats-db/bigrquery")
+
+# Use your project ID here
+project <- "your-project-id" # put your project ID here
+
+# Example query - select copies of files with content containing "TODO"
+sql <- "SELECT SUM(copies)
+FROM `bigquery-public-data.github_repos.sample_contents`
+WHERE NOT binary AND content LIKE '%TODO%'"
+
+# Execute the query and store the result
+todo_copies <- query_exec(sql, project = project, useLegacySql = FALSE)
+
+```
+```{r}
+library(tm)
+#install.packages("SnowballC")
+pacman::p_load(SnowballC)
+library(wordcloud)
+
+#remove all • 
+FCAglassdoor2<-FCAglassdoor1%>%str_replace_all("\\•  ", "")
+
+corpus = Corpus(VectorSource(FCAglassdoor2))
+corpus = tm_map(corpus, tolower)
+corpus = tm_map(corpus, PlainTextDocument)
+corpus = tm_map(corpus, removePunctuation)
+corpus = tm_map(corpus, removeNumbers)
+corpus = tm_map(corpus, removeWords, stopwords("english"))
+corpus = tm_map(corpus, stemDocument)
+corpus<- tm_map(corpus, stripWhitespace)
+#dtm = TermDocumentMatrix(corpus)
+#dtm = removeSparseTerms(dtm, 0.97)
+corpus
+
+inspect(corpus[1])
+
+dtm
+
+```
+
+```{r}
+#FCA_html2<-FCA_html%>%str_replace_all("[[:xdigit:]]", "")
+
+corpus = Corpus(VectorSource(FCA_html))
+
+tdm <- TermDocumentMatrix(corpus,
+                          control = list(removePunctuation = TRUE, 
+                                      stopwords =  TRUE, 
+                                      removeNumbers = TRUE, tolower = TRUE,
+                                      PlainTextDocument=TRUE,
+                                      stripWhitespace=TRUE, stemming = TRUE))
+
+tdm
+
+inspect(tdm)
+#%>%as.data.frame.matrix()%>%arrange(desc(count))
+
+tidy(tdm)
+#tdm = tm_map(tdm, removeNumbers)
+tdm = as.matrix(tdm)
+
+
+class(tdm)
+dim(tdm)
+```
+
+
+```{r}
+#labeledTerms = as.data.frame(as.matrix(tdm))
+```
+
+
+
+```{r}
+frequencies = DocumentTermMatrix(corpus)
+frequencies
+```
+
+
+```{r}
+findFreqTerms(frequencies, lowfreq=20)
+```
+
+Remove sparse terms
+```{r}
+sparse = removeSparseTerms(frequencies, 0.995)
+sparse
+```
+
+What about associations between words? Let’s have a look at what other words had a high association with “love”.
+```{r}
+findAssocs(dtm, "love", 0.8)
+
+```
+
+
+
+```{r}
+# separating text by emotion
+emos = levels(factor(sent_df$emotion))
+nemo = length(emos)
+emo.docs = rep("", nemo)
+for (i in 1:nemo)
+{
+   tmp = some_txt[emotion == emos[i]]
+   emo.docs[i] = paste(tmp, collapse=" ")
+}
+
+# remove stopwords
+emo.docs = removeWords(emo.docs, stopwords("english"))
+# create corpus
+corpus = Corpus(VectorSource(emo.docs))
+tdm = TermDocumentMatrix(corpus)
+tdm = as.matrix(tdm)
+colnames(tdm) = emos
+
+# comparison word cloud
+comparison.cloud(tdm, colors = brewer.pal(nemo, "Dark2"),
+   scale = c(3,.5), random.order = FALSE, title.size = 1.5)
+```
+
+
+
+```{r}
+library(RColorBrewer)
+
+# comparison word cloud
+comparison.cloud(tdm)
+```
+
+```{r}
+comparison.cloud(tdm,scale=c(4,.5),max.words=300,
+	random.order=FALSE,rot.per=.1,
+	colors=viridis_pal(option = "D")(4),
+	use.r.layout=FALSE,title.size=3)
+
+
+# wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+#           max.words=200, random.order=FALSE, rot.per=0.35, 
+#           colors=brewer.pal(8, "Dark2"))
+```
+
+### High Frequency Words
+
+```{r}
+v <-sort(rowSums(tdm),decreasing=TRUE)
+d <-data_frame(word = names(v),freq=v) %>%mutate(word = reorder(word, freq))
+head(d, 10)
+
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+
+d=d[1:20,]
+ggplot(d, aes(x=word,y=freq,fill="")) + 
+ geom_bar(stat="identity")+theme_bw()+
+  theme(axis.text.x =element_text(angle =45,hjust = 1))
+#scale_fill_viridis(end = 0.85, discrete=TRUE, direction = 1)
+scale_fill_manual(values=viridis_pal(option = "D")(1))
+
+```
+
+### Word Cloud with Bing Lexicon
+
+```{r}
+
+ GlassdoorPages %>%
+    unnest_tokens(word, text)%>%
+  inner_join(bing) %>%
+  count(word, sentiment, sort = TRUE) %>%
+ reshape2::acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = viridis_pal(option = "D")(2),
+                   max.words = 100)
+```
+
+### Word Cloud with nrc Lexicon
+
+
+```{r}
+GlassdoorPages %>%
+    unnest_tokens(word, text)%>%
+  inner_join(get_sentiments("nrc")) %>%
+  count(word, sentiment, sort = TRUE)%>%
+  spread( word,n,fill = 0)
+```
+
+
+
+
+```{r}
+
+GlassdoorPages %>%
+    unnest_tokens(word, text)%>%
+  inner_join(get_sentiments("nrc")) %>%
+  count(word, sentiment, sort = TRUE)%>%
+filter(sentiment %in% c("negative","positive","joy","sadness"))%>%
+reshape2::acast(word ~ sentiment, value.var = "n", fill = 0)%>% 
+comparison.cloud(colors = c("#F8766D", "#00BFC4"),
+                  max.words = 200)
+
+
+
+```
+
+#### Unnesting Sentences.
+
+```{r}
+GlassdoorPages %>%
+    unnest_tokens(sentence, text, token = "sentences")%>%
+  inner_join(get_sentiments("nrc"),by=c("sentence"="word")) %>%
+  count(sentence, sentiment, sort = TRUE)
+```
+

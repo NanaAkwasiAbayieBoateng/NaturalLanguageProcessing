@@ -1,0 +1,453 @@
+---
+title: "R Notebook"
+output: html_notebook
+author: Nana Boateng
+df_print: paged
+Time: '`r Sys.time()`'
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+---
+
+Text mining and word cloud fundamentals in 
+
+
+
+```{r,warning=FALSE,message=FALSE}
+#install.packages('Rgraphviz')
+# install Rgraphviz' from bioconductor
+## try http:// if https:// URLs are not supported
+#source("https://bioconductor.org/biocLite.R")
+#biocLite("Rgraphviz")
+```
+
+
+
+```{r,warning=FALSE,message=FALSE}
+# Install
+#install.packages("tm")  # for text mining
+#install.packages("SnowballC") # for text stemming
+#install.packages("wordcloud") # word-cloud generator 
+#install.packages("RColorBrewer") # color palettes
+# Load
+library("tm")
+library("SnowballC")
+library("wordcloud")
+library("RColorBrewer")
+library("stringr")
+library(tidyverse)
+library(Rgraphviz)
+```
+
+
+#### Read the text data with the readLines function
+```{r}
+#text <- readLines(file.choose())
+#In the example below, I’ll load a .txt file hosted on STHDA website:
+# Read the text file from internet
+filePath <- "http://www.sthda.com/sthda/RDoc/example-files/martin-luther-king-i-have-a-dream-speech.txt"
+text <- readLines(filePath)
+
+```
+
+
+
+
+#### 2.Load the data as a corpus. VectorSource() function creates a corpus of character vectors.
+```{r}
+# Load the data as a corpus
+docs <- Corpus(VectorSource(text))
+
+docs
+
+```
+
+
+3.	Inspect the content of the document
+
+```{r}
+inspect(docs)
+```
+
+
+
+#### Text transformation
+Transformation is performed using tm_map() function to replace, for example, special characters from the text.
+Replacing “/”, “@” and “|” with space:
+
+
+```{r}
+toSpace <-content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+docs <- tm_map(docs, toSpace, "/")
+docs <- tm_map(docs, toSpace, "@")
+docs <- tm_map(docs, toSpace, "\\|")
+docs
+
+#str_replace_all(cities, pattern = "[aeiou]", "")
+#docs <- tm_map(docs, toSpace, "/|@|nn|")
+```
+
+
+
+```{r}
+# toSpace <-content_transformer(function (x , pattern ) str_replace_all(x, pattern , ""))
+# docs <- tm_map(docs, toSpace, "/")
+# docs <- tm_map(docs, toSpace, "@")
+# docs <- tm_map(docs, toSpace, "\\|")
+# docs
+```
+
+
+
+
+
+```{r}
+# docs<-str_replace_all(docs, pattern="/" , "")
+# docs<-str_replace_all(docs, pattern="@" , "")
+# docs<-str_replace_all(docs, pattern="\\|" , "")
+# docs
+```
+
+
+
+####Cleaning the text
+the tm_map() function is used to remove unnecessary white space, to convert the text to lower case, to remove common stopwords like ‘the’, “we”.
+The information value of ‘stopwords’ is near zero due to the fact that they are so common in a language. Removing this kind of words is useful before further analyses. For ‘stopwords’, supported languages are danish, dutch, english, finnish, french, german, hungarian, italian, norwegian, portuguese, russian, spanish and swedish. Language names are case sensitive.
+I’ll also show you how to make your own list of stopwords to remove from the text.
+You could also remove numbers and punctuation with removeNumbers and removePunctuation arguments.
+
+
+```{r}
+# Convert the text to lower case
+docs <-tm_map(docs, content_transformer(tolower))
+# Remove numbers
+docs <-tm_map(docs, removeNumbers)
+# Remove english common stopwords
+docs <-tm_map(docs, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+docs <-tm_map(docs, removeWords, c("the", "we","of")) 
+# Remove punctuations
+docs <-tm_map(docs, removePunctuation)
+# Eliminate extra white spaces
+docs <-tm_map(docs, stripWhitespace)
+
+
+
+toString<-content_transformer(function(x,from,to) gsub(from,to,x))
+
+docs <-tm_map(docs, toString,"specific transform","ST")
+
+
+docs <-tm_map(docs, toString,"other specific transform","OST")
+
+# Text stemming
+ docs <- tm_map(docs, stemDocument)
+
+```
+
+
+
+
+####Step 4 : Build a term-document matrix
+Document matrix is a table containing the frequency of the words. Column names are words and row names are documents. The function TermDocumentMatrix() from text mining package can be used as follow :
+
+
+
+```{r}
+dtm <-TermDocumentMatrix(docs)
+m <-as.matrix(dtm)
+v <-sort(rowSums(m),decreasing=TRUE)
+d <-data_frame(word = names(v),freq=v)
+head(d, 10)
+
+
+```
+
+
+####Step 5 : Generate the Word cloud
+The importance of words can be illustrated as a word cloud as follow :
+
+
+```{r}
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+
+```
+
+
+
+####Explore frequent terms and their associations
+You can have a look at the frequent terms in the term-document matrix as follow. In the example below we want to find words that occur at least four times :
+
+9 Identifying Frequent Items and Associations
+One thing we often to rst do is to get an idea of the most frequent terms in the corpus. We use
+findFreqTerms() to do this. Here we limit the output to those terms that occur at least 1,000
+times:
+```{r}
+findFreqTerms(dtm, lowfreq = 4)
+```
+
+
+You can analyze the association between frequent terms (i.e., terms which correlate) using findAssocs() function. The R code below identifies which words are associated with “freedom” in I have a dream speech :
+
+
+```{r}
+findAssocs(dtm, terms = "freedom", corlimit = 0.3)
+```
+
+
+
+####Plot word frequencies
+The frequency of the first 10 frequent words are plotted :
+
+
+```{r}
+barplot(d[1:10,]$freq, las = 2, names.arg = d[1:10,]$word,
+        col ="lightblue", main ="Most frequent words",
+        ylab = "Word frequencies")
+
+```
+
+```{r}
+
+d=d[1:10,]%>%arrange(desc(freq))
+
+```
+
+
+```{r}
+
+
+ggplot(d, aes(x=word,y=freq)) + 
+ geom_bar(stat="identity")+theme_bw()+
+  theme(axis.text.x =element_text(angle =45,hjust = 1))
+
+
+```
+
+
+
+```{r}
+has_rownames(mtcars)
+# has_rownames(iris)
+has_rownames(remove_rownames(mtcars))
+# 
+ 
+ #remove_rownames(mtcars)
+ head(rownames_to_column(mtcars))
+# 
+ mtcars_tbl <- as_tibble(rownames_to_column(mtcars))
+ mtcars_tbl
+ column_to_rownames(as.data.frame(mtcars_tbl))
+```
+
+
+####Interactive Heatmap Plot of mtcars data in R
+```{r}
+library(d3heatmap)
+library(stringr)
+#d3heatmap(d, scale = "column")
+d[,1]
+ mtcars
+# dd=d[,2]
+# rownames(dd)
+# d[,1]
+# 
+# has_rownames(d)
+# 
+mtcars_tbl <-as_tibble(rownames_to_column(mtcars))
+mtcars_tbl%>%head()
+column_to_rownames(as.data.frame(mtcars_tbl))
+
+# paste(d[,1],sep=",",collapse =)
+ 
+ # split into words
+ 
+#  a="will freedom ring dream day  
+#  let everi one abl togeth"
+# str_split(a, " ")
+# a=str_split(as.vector(d[,1]), " ")
+# a
+b=str_replace_all(as_vector(d[,1]), pattern = "[[:print:]] ", ";")
+b
+dd=d[,2]
+ rownames(dd)=as.character(b)
+ dd
+  
+```
+
+
+####8 Removing Sparse Terms
+We are often not interested in infrequent terms in our documents. Such \sparse" terms can be
+removed from the document term matrix quite easily using removeSparseTerms():
+```{r}
+dim(dtm)
+
+dtms <- removeSparseTerms(dtm, 0.1)
+dim(dtms)
+```
+
+```{r}
+#inspect(dtms)
+```
+```{r}
+freq <- colSums(as.matrix(dtms))
+freq
+```
+```{r}
+table(freq)
+```
+
+```{r}
+# plot(dtm,
+# terms=findFreqTerms(dtm, lowfreq=100)[1:50],
+# corThreshold=0.5)
+```
+
+```{r}
+# plot(dtm,
+# terms=findFreqTerms(dtm, lowfreq=100)[1:50],
+# corThreshold=0.5)
+```
+
+
+
+
+####Twitter Coverage of the Sydney Bioinformatics Research Symposium 2017
+
+
+```{r,warning=FALSE,message=FALSE}
+#install.packages("rtweet")
+library(rtweet)
+TWITTER_PAT ="EePxcG88TTYFNEDuUqPKy1B5c"
+sbrs17 <-search_tweets("#sbrs17 OR #sbrs2017", 1000)
+#sbrs17
+#Consumer Key (API Key)="EePxcG88TTYFNEDuUqPKy1B5c"
+#Callback URL=http://127.0.0.1:1410
+
+#App-only authentication	https://api.twitter.com/oauth2/token
+#Request token URL	https://api.twitter.com/oauth/request_token
+#Authorize URL	https://api.twitter.com/oauth/authorize
+#Access token URL	https://api.twitter.com/oauth/access_token
+
+# Application Settings
+# Keep the "Consumer Secret" a secret. This key should never be human-readable in your application.
+# Consumer Key (API Key)	EePxcG88TTYFNEDuUqPKy1B5c
+# Consumer Secret (API Secret)	G2Cbz79roLFUmccub66zPgNo1uztR7Fo5vIzctJW3TBNTLPPsb
+# Access Level	Read and write (modify app permissions)
+# Owner	thegucci148
+# Owner ID	237877830
+
+TWITTER_PAT ="EePxcG88TTYFNEDuUqPKy1B5c"
+```
+
+
+
+
+```{r,warning=FALSE,message=FALSE}
+#install.packages("tidytext")
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(rtweet)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(knitr)
+library(wordcloud)
+library(tidytext)
+library(igraph)
+theme_set(theme_light())
+```
+
+
+
+
+
+
+
+Tweets by day
+
+```{r,warning=FALSE,message=FALSE}
+#authorize r to read tweets from your timeline
+## whatever name you assigned to your created app
+appname <- "Nana148"
+
+## api key (example below is not a real key)
+key <- "EePxcG88TTYFNEDuUqPKy1B5c"
+
+## api secret (example below is not a real key)
+secret <- "G2Cbz79roLFUmccub66zPgNo1uztR7Fo5vIzctJW3TBNTLPPsb"
+
+## create token named "twitter_token"
+twitter_token <- create_token(
+    app = appname,
+    consumer_key = key,
+    consumer_secret = secret)
+
+```
+
+
+
+####Saving tokens
+Use saveRDS() to save twitter_token to your home directory. The code below should locate and construct the path to your home directory for you. Assuming you’ve saved your token as twitter_token, the final line in the code below will save your token for you as well.
+```{r,warning=FALSE,message=FALSE}
+## path of home directory
+home_directory <- path.expand("/Users/nanaakwasiabayieboateng/Documents/memphisclassesbooks/DataMiningscience/Text")
+
+## combine with name for token
+file_name <- file.path(home_directory, "twitter_token.rds")
+
+## save token to home directory
+saveRDS(twitter_token, file = file_name)
+```
+
+
+####Environment variable
+Create a plain text file containing the path to your token object and save it to your home directory as “.Renviron”.
+
+To create a plain text file in R, modify the code below. Change TWITTER_PAT location to match the path you used earlier (in the example below, you’d want to change “/Users/mwk/twitter_token.rds”). You can also create a plain text document in any text editor like TextEdit or Notepad. If you’re using Rstudio, select File > New File > Text File.
+
+Important: Make sure the last line of “.Renviron” is blank. I achieved this in the code below by including fill = TRUE in the cat function.
+
+```{r,warning=FALSE,message=FALSE}
+## On my mac, the .Renviron text looks like this:
+##     TWITTER_PAT=/Users/mwk/twitter_token.rds
+
+## assuming you followed the procodures to create "file_name"
+##     from the previous code chunk, then the code below should
+##     create and save your environment variable.
+cat(paste0("TWITTER_PAT=", file_name),
+    file = file.path(home_directory, ".Renviron"),
+    append = TRUE)
+```
+
+
+
+
+
+
+
+
+```{r,warning=FALSE,message=FALSE}
+#install.packages("tidytext")
+# 
+# sbrs17<-search_tweets("#sbrs17 OR #sbrs2017", 1000)
+# 
+# dir.create("Text")
+# save(iris, file=file.path("Text","twitter_token.rds"))
+# 
+# sbrs17<-readRDS("Users/nanaakwasiabayieboateng/Documents/memphisclassesbooks/DataMiningscience/Text/twitter_token.rds")
+
+```
+
+
+
+```{r}
+# sbrs17 %>% 
+#   mutate(date = as_date(created_at, tz = "Australia/Melbourne")) %>% 
+#   count(date) %>% 
+#   ggplot(aes(date, n)) + geom_col(fill = "skyblue3") +  
+#     labs(x = "Date", y = "Tweets", title = "#sbrs 2017 tweets per day") + 
+#     theme(axis.text = element_text(size = 12), axis.title = element_text(size = 12))
+```
+

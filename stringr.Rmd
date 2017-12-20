@@ -1,0 +1,1975 @@
+---
+title: "Stringr Tutorials"
+author: Nana Boateng
+df_print: paged
+Time: '`r Sys.time()`'
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+---
+
+
+```{r}
+base::date()
+Sys.Date()
+Sys.time()
+```
+
+
+```{r,message=FALSE,warning=FALSE}
+library(tidyverse)
+library(stringr)
+library(RCurl)
+```
+
+
+
+
+```{r}
+mystrings = c('the cat in the hat','green eggs and ham','fox in socks')
+
+strsplit(mystrings,' ')
+```
+
+```{r}
+world=c("United Kingdom","United States","Russia")
+grep('United',world,value=TRUE)
+```
+
+
+```{r}
+strings = c('elephant','aardvark','chicken','dog','duck','frog')
+substring(strings,1,5)
+```
+
+
+
+
+```{r}
+# take a peek of USArrests
+head(USArrests)
+```
+
+
+
+```{r}
+# names of states
+states = rownames(USArrests)
+states
+```
+
+Abbreviation
+```{r}
+# abbreviate state names
+states2 = abbreviate(states)
+states2
+```
+
+
+```{r}
+# remove vector names (for convenience)
+names(states2) = NULL
+states2
+```
+
+
+Getting the longest name
+```{r}
+# size (in characters) of each name
+state_chars = nchar(states)
+# longest name
+states[which(state_chars == max(state_chars))]
+```
+
+Counting the number a's
+```{r}
+# position of a's
+positions_a = gregexpr(pattern = "a", text = states, ignore.case = TRUE)
+# how many a's?
+num_a = sapply(positions_a, function(x) ifelse(x[1] > 0, length(x), 0))
+num_a
+```
+
+```{r}
+# load stringr (remember to install it first)
+library(stringr)
+# total number of a's
+str_count(states, "a")
+```
+
+Since str count() does not contain the argument ignore.case, we need to transform all letters to lower case, and then count the number of a’s like this:
+
+```{r}
+# total number of a's
+str_count(tolower(states), "a")
+```
+
+counting the number of vowels
+```{r}
+# vector of vowels
+vowels = c("a", "e", "i", "o", "u")
+# vector for storing results
+num_vowels = vector(mode = "integer", length = 5)
+# calculate number of vowels in each name
+for (j in seq_along(vowels)) {
+  
+     num_aux = str_count(tolower(states), vowels[j])
+num_vowels[j] = sum(num_aux) }
+# add vowel names
+names(num_vowels) = vowels
+# total number of vowels
+num_vowels
+```
+
+
+```{r}
+# sort them in decreasing order
+sort(num_vowels, decreasing = TRUE)
+## a i o e u ##61443628 8
+```
+
+No Quotes
+```{r}
+# text string
+my_string = "programming with data is fun"
+# print string
+print(my_string)
+# print without quotes
+print(my_string, quote = FALSE)
+```
+
+###Concatenate and print with cat()
+```{r}
+# simply print with 'cat()'
+cat(my_string)
+
+```
+
+```{r}
+# concatenate and print
+cat(my_string, "with R")
+```
+
+
+```{r}
+# especifying 'sep'
+cat(my_string, "with R", sep = " =) ")
+
+
+```
+
+```{r}
+# another example
+cat(1:10, sep = "-")
+```
+
+
+```{r}
+# first four months
+cat(month.name[1:6], sep = " ")
+```
+
+
+```{r}
+# fill = 30
+cat("Loooooooooong strings", "can be displayed", "in a nice format",
+    "by using the 'fill' argument", fill = 30)
+```
+
+format
+
+```{r}
+# default usage
+format(13.7)
+
+# another example
+format(13.12345678)
+```
+
+
+
+
+```{r}
+# use of 'nsmall'
+format(13.7, nsmall = 3)
+```
+
+
+
+
+###Unquoted characters with noquote()
+
+```{r}
+# noquote
+noquote(my_string)
+```
+
+
+
+```{r}
+# class noquote
+no_quotes = noquote(c("some", "quoted", "text", "!%^(&="))
+# display
+no_quotes
+```
+
+```{r}
+# check class
+class(no_quotes)
+
+# test character
+is.character(no_quotes)
+
+# no quotes even when subscripting
+no_quotes[2:3]
+```
+
+
+```{r}
+# justify options
+format(c("A", "BB", "CCC"), width = 5, justify = "centre") 
+
+format(c("A", "BB", "CCC"), width = 5, justify = "left") 
+
+format(c("A", "BB", "CCC"), width = 5, justify = "right")
+
+format(c("A", "BB", "CCC"), width = 5, justify = "none")
+```
+
+
+```{r}
+# digits
+
+format(1/1:5, digits = 2)
+
+format(format(1/1:5, digits = 2), width = 6, justify = "c")
+```
+
+```{r}
+# big.mark
+format(123456789, big.mark = ",")
+```
+
+
+###C-style string formatting with sprintf()
+The function sprintf() is a wrapper for the C function sprintf() that returns a formatted string combining text and variable values. The nice feature about sprintf() is that it provides us a very flexible way of formatting vector elements as character strings. Its usage has the following form:
+sprintf(fmt, ...)
+The argument fmt is a character vector of format strings. The allowed conversion specifica- tions start the symbol % followed by numbers and letters. For demonstration purposes here are several ways in which the number pi can be formatted
+
+```{r}
+# '%f' indicates 'fixed point' decimal notation
+sprintf("%f", pi)
+
+# decimal notation with 3 decimal digits
+sprintf("%.3f", pi)
+
+# 1 integer and 0 decimal digits
+sprintf("%1.0f", pi)
+
+# decimal notation with 3 decimal digits
+sprintf("%5.1f", pi)
+
+sprintf("%05.1f", pi)
+
+# print with sign (positive)
+sprintf("%+f", pi)
+
+# prefix a space
+sprintf("% f", pi)
+
+# left adjustment
+sprintf("%-10f", pi)  # left justified
+
+# exponential decimal notation 'e'
+sprintf("%e", pi)
+
+# exponential decimal notation 'E'
+sprintf("%E", pi)
+
+# number of significant digits (6 by default)
+sprintf("%g", pi)
+```
+
+####Converting objects to strings with toString()
+
+```{r}
+# default usage
+#toString(17.04)
+
+# combining two objects
+#toString(c(17.04, 1978))
+
+# combining several objects
+#toString(c("Bonjour", 123, TRUE, NA, log(exp(1))))
+```
+
+One of the nice features about toString() is that you can specify its argument width to fix a maximum field width.
+
+```{r}
+# use of 'width'
+#toString(c("one", "two", "3333333333"), width = 8)
+```
+
+
+
+####Basic String Manipulations
+
+Function    Description
+nchar()      number of characters
+tolower()    convert to lower case
+toupper()     convert to upper case
+casefold()     case folding
+chartr()       character translation abbreviation
+abbreviate()     abbreviation
+substring()     substrings of a character vector
+substr()        substrings of a character vector
+
+
+####Count number of characters with nchar()
+
+```{r}
+# how many characters?
+nchar(c("How", "many", "characters?")) 
+
+# how many characters?
+nchar("How many characters?")
+
+# how many elements?
+length(c("How", "many", "characters?"))
+
+# how many elements?
+length("How many characters?")
+
+```
+
+####Convert to lower case with tolower()
+
+```{r}
+# to lower case
+tolower(c("aLL ChaRacterS in LoweR caSe", "ABCDE"))
+```
+
+
+####Convert to upper case with toupper()
+
+```{r}
+# to upper case
+toupper(c("All ChaRacterS in Upper Case", "abcde"))
+```
+
+
+####Upper or lower case conversion with casefold() 
+casefold(x, upper = FALSE)
+
+```{r}
+ # lower case folding
+casefold("aLL ChaRacterS in LoweR caSe")
+```
+
+
+```{r}
+# upper case folding
+casefold("All ChaRacterS in Upper Case", upper = TRUE)
+```
+
+
+####Character translation with chartr()
+chartr(old, new, x)
+
+```{r}
+# replace 'a' by 'A'
+chartr("a", "A", "This is a boring string")
+```
+
+
+
+```{r}
+# multiple replacements
+crazy = c("Here's to the crazy ones", "The misfits", "The rebels")
+chartr("aei", "#!?", crazy)
+```
+
+
+####Abbreviate strings with abbreviate()
+Another useful function for basic manipulation of character strings is abbreviate(). Its
+usage has the following structure:
+ abbreviate(names.org, minlength = 4, dot = FALSE, strict = FALSE,
+            method = c("left.keep", "both.sides"))
+            
+            
+            
+
+```{r}
+# some color names
+some_colors = colors()[1:4]
+some_colors
+
+colors1 = abbreviate(some_colors)
+colors1
+
+# abbreviate with 'minlength'
+colors2 = abbreviate(some_colors, minlength = 5)
+colors2
+
+# abbreviate
+colors3 = abbreviate(some_colors, minlength = 3, method = "both.sides")
+colors3
+```
+
+####Replace substrings with substr()
+
+
+substr(x, start, stop)
+
+
+```{r}
+# extract 'bcd'
+substr("abcdef", 2, 4)
+
+# replace 2nd letter with hash symbol
+x = c("may", "the", "force", "be", "with", "you")
+substr(x, 2, 2) <- "#"
+x
+
+# replace 2nd and 3rd letters with happy face
+y = c("may", "the", "force", "be", "with", "you")
+substr(y, 2, 3) <- ":)"
+y
+
+# replacement with recycling
+z = c("may", "the", "force", "be", "with", "you")
+substr(z, 2, 3) <- c("#", "@")
+z
+
+```
+
+
+####Replace substrings with substring()
+
+substring(text, first, last = 1000000L)
+
+
+```{r}
+# same as 'substr'
+substring("ABCDEF", 2, 4)
+
+substr("ABCDEF", 2, 4)
+
+# extract each letter
+substring("ABCDEF", 1:6, 1:6)
+
+# multiple replacement with recycling
+text = c("more", "emotions", "are", "better", "than", "less")
+substring(text, 1:3)<- c(" ", "zzz")
+text
+```
+
+
+
+####Set Operations
+
+ Function
+union()          Description set union 
+intersect()      intersection
+setdiff()        set difference
+setequal()        equal sets
+identical()       exact equality 
+is.element()       is element 
+%in%()            contains
+sort()           sorting 
+paste(rep())      repetition
+
+
+#### Set union with union()
+
+```{r}
+# two character vectors
+set1 = c("some", "random", "words", "some")
+set2 = c("some", "many", "none", "few")
+# union of set1 and set2
+union(set1, set2)
+```
+
+
+#### Set difference with setdiff()
+```{r}
+# two character vectors
+set3 = c("some", "random", "few", "words")
+set4 = c("some", "many", "none", "few")
+# intersect of set3 and set4
+intersect(set3, set4)
+```
+
+
+#### Set difference with setdiff()
+
+```{r}
+# two character vectors
+set5 = c("some", "random", "few", "words")
+set6 = c("some", "many", "none", "few")
+# difference between set5 and set6
+ setdiff(set5, set6)
+
+set5 = data.frame(a=c("some", "random", "few", "words"))
+set6 = data.frame(b=c("some", "many", "none", "few"))
+anti_join(set5,set6,by=c("a"="b"))
+
+```
+
+
+#### Set equality with setequal()
+
+```{r}
+# three character vectors
+set7 = c("some", "random", "strings")
+set8 = c("some", "many", "none", "few")
+set9 = c("strings", "random", "some")
+
+# set7 == set8?
+setequal(set7, set8)
+
+# set7 == set9?
+setequal(set7, set9)
+```
+
+####Exact equality with identical()
+
+```{r}
+# set7 identical to set7?
+identical(set7, set7)
+
+# set7 identical to set9?
+identical(set7, set9)
+```
+
+
+#### Element contained with is.element()
+
+```{r}
+# three vectors
+set10 = c("some", "stuff", "to", "play", "with")
+elem1 = "play"
+elem2 = "crazy"
+
+# elem1 in set10?
+is.element(elem1, set10)
+
+# elem2 in set10?
+is.element(elem2, set10)
+
+# elem1 in set10?
+elem1 %in% set10
+
+# elem2 in set10?
+elem2 %in% set10
+
+```
+
+
+####Sorting with sort()
+
+```{r}
+
+set11 = c("today", "produced", "example", "beautiful", "a", "nicely")
+# sort (decreasing order)
+sort(set11)
+
+# sort (increasing order)
+sort(set11, decreasing = TRUE)
+
+
+sort(c(2,3,4,1))
+```
+
+
+###String manipulations with stringr
+
+
+Function           Description                                  Similar to                      
+str c()            string concatenation                            paste()
+str_length()        number of characters                          nchar()
+str_sub()           extracts substrings                            substring()
+str_dup()          duplicates characters                            none
+str_trim()         removes leading and trailing whitespace          none
+str_pad()         pads a string                                      none     
+str_wrap()        wraps a string paragraph                           strwrap()      
+str_trim()        trims a string                                     none
+
+
+
+
+####Concatenating with str c()
+
+
+```{r}
+# default usage
+str_c("May", "The", "Force", "Be", "With", "You")
+
+# removing zero length objects
+str_c("May", "The", "Force", NULL, "Be", "With", "You", character(0))
+
+# changing separator
+str_c("May", "The", "Force", "Be", "With", "You", sep = "_")
+
+
+```
+
+
+
+
+####Number of characters with str length()
+
+```{r}
+# some text (NA included)
+some_text = c("one", "two", "three", NA, "five")
+
+# compare 'str_length' with 'nchar'
+nchar(some_text)
+
+str_length(some_text)
+
+```
+
+```{r}
+# some factor
+some_factor = factor(c(1, 1, 1, 2, 2, 2), labels = c("good", "bad"))
+some_factor
+# some factor
+#nchar(some_factor)
+## Error:  ’nchar()’ requires a character vector
+# now compare it with 'str_length'
+str_length(some_factor)
+
+```
+
+
+####Substring with str sub()
+str_sub(string, start = 1L, end = -1L)
+
+```{r}
+# some text
+lorem = "Lorem Ipsum"
+# apply 'str_sub'
+str_sub(lorem, start = 1, end = 5)
+
+# equivalent to 'substring'
+substring(lorem, first = 1, last = 5)
+
+# another example 1 to end, 2 to end 3 to end
+str_sub("adios", 1:3)
+```
+
+
+
+```{r}
+ # some strings
+resto = c("brasserie", "bistrot", "creperie", "bouchon")
+
+# 'str_sub' with negative positions
+str_sub(resto, start = -4, end = -1)
+
+# compared to substring (useless)
+substring(resto, first = -4, last = -1)
+
+```
+
+
+
+```{r}
+# extracting sequentially
+str_sub(lorem, seq_len(nchar(lorem)))
+
+
+
+```
+```{r}
+substring(lorem, seq_len(nchar(lorem)))
+
+
+```
+
+
+```{r}
+# reverse substrings with negative positions
+str_sub(lorem, -seq_len(nchar(lorem)))
+
+
+```
+
+
+```{r}
+substring(lorem, -seq_len(nchar(lorem)))
+```
+
+
+```{r}
+# replacing 'Lorem' with 'Nullam'
+lorem = "Lorem Ipsum"
+str_sub(lorem, 1, 5) <- "Nullam"
+lorem
+
+# replacing with negative positions
+lorem = "Lorem Ipsum"
+str_sub(lorem, -1) <- "Nullam"
+lorem
+
+# multiple replacements
+lorem = "Lorem Ipsum"
+str_sub(lorem, c(1, 7), c(5, 8)) <- c("Nullam", "Enim")
+lorem
+
+
+# replacing 'Lorem' with ''
+lorem = "Lorem Ipsum"
+str_sub(lorem, 1, 5) <- ""
+lorem
+
+```
+
+
+
+
+####Duplication with str dup()
+str_dup(string, times)
+
+```{r}
+# default usage
+str_dup("hola", 3)
+
+# use with differetn 'times'
+str_dup("adios", 1:3)
+
+# use with a string vector
+words = c("lorem", "ipsum", "dolor", "sit", "amet")
+str_dup(words, 2)
+
+str_dup(words, 1:5)
+```
+
+####Padding with str pad()
+str_pad(string, width, side = "left", pad = " ")
+
+
+```{r}
+# default usage
+str_pad("hola", width = 7)
+
+# pad both sides
+str_pad("adios", width = 7, side = "both")
+
+# left padding with '#'
+str_pad("hashtag", width = 8, pad = "#")
+
+# pad both sides with '-'
+str_pad("hashtag", width = 9, side = "both", pad = "-")
+```
+
+####Wrapping with str wrap()
+str_wrap(string, width = 80, indent = 0, exdent = 0)
+
+```{r}
+# quote (by Douglas Adams)
+some_quote = c(
+  "I may not have gone",
+  "where I intended to go,",
+  "but I think I have ended up",
+  "where I needed to be")
+# some_quote in a single paragraph
+some_quote = paste(some_quote, collapse = " ")
+```
+
+```{r}
+# display paragraph with width=30
+cat(str_wrap(some_quote, width = 30))
+```
+
+
+
+```{r}
+# display paragraph with first line indentation of 2
+cat(str_wrap(some_quote, width = 30, indent = 2), "\n")
+
+
+# display paragraph with following lines indentation of 3
+cat(str_wrap(some_quote, width = 30, exdent = 3), "\n")
+```
+
+####Trimming with str trim()
+str_trim(string, side = "both")
+
+```{r}
+
+# text with whitespaces
+bad_text = c("This", " example ", "has several   ", "
+whitespaces ")
+
+# remove whitespaces on the left side
+str_trim(bad_text, side = "left")
+
+
+# remove whitespaces on the right side
+str_trim(bad_text, side = "right")
+
+# remove whitespaces on the both sides
+str_trim(bad_text, side = "both")
+
+```
+
+
+####Word extraction with word()
+
+ word(string, start = 1L, end = start, sep = fixed(" "))
+ 
+ 
+ 
+```{r}
+# some sentence
+change = c("Be the change", "you want to be")
+# extract first word
+word(change, 1)
+
+# extract second word
+word(change, 2)
+
+# extract last word
+word(change, -1)
+
+# extract all but the first words
+word(change, 2, -1)
+```
+
+
+####Regular Expressions 
+#### Replacing unwanted characters in a string
+
+```{r}
+# string
+money = "$money"
+# the right way in R
+sub(pattern = "\\$", replacement = "", x = money)
+```
+
+```{r}
+# dollar
+sub("\\$", "", "$Peace-Love")
+
+# dot
+sub("\\.", "", "Peace.Love")
+
+# plus
+sub("\\+", "", "Peace+Love")
+
+# caret
+sub("\\^", "", "Peace^Love")
+
+# vertical bar
+sub("\\|", "", "Peace|Love")
+
+# opening round bracket
+sub("\\(", "", "Peace(Love)")
+
+# closing round bracket
+sub("\\)", "", "Peace(Love)")
+
+# opening square bracket
+sub("\\[", "", "Peace[Love]")
+
+# closing square bracket
+sub("\\]", "", "Peace[Love]")
+
+# opening curly bracket
+sub("\\{", "", "Peace{Love}")
+
+
+# closing curly bracket
+sub("\\}", "", "Peace{Love}")
+
+# double backslash
+sub("\\\\", "", "Peace\\Love")
+
+# opening and closing square bracket
+sub("\\[| \\] ", "", "Peace[Love]")
+#%>%sub(" \\]", "", "Peace[Love]")
+gsub("\\[| \\] ", "", "Peace[Love]")
+
+n = c("[Dave]", "[Tony]", "[Sara]")
+
+gsub("\\[|\\]", "", n)
+
+n %>% str_replace_all("\\[|\\]", "")
+
+"Peace[Love]"%>%str_replace_all("\\[|\\]", "")
+```
+
+
+
+####Sequences
+
+####
+Digits and non-digits
+```{r}
+# replace digit with '_'
+sub("\\d", "_", "the dandelion war 2010") 
+
+gsub("\\d", "_", "the dandelion war 2010") 
+
+# replace non-digit with '_'
+sub("\\D", "_", "the dandelion war 2010") 
+ 
+gsub("\\D", "_", "the dandelion war 2010")
+```
+
+####Spaces and non-spaces
+
+```{r}
+# replace space with '_'
+sub("\\s", "_", "the dandelion war 2010") 
+
+gsub("\\s", "_", "the dandelion war 2010") 
+
+# replace non-space with '_'
+sub("\\S", "_", "the dandelion war 2010") 
+
+gsub("\\S", "_", "the dandelion war 2010")
+```
+
+Words and non-words
+
+```{r}
+# replace word with '_'
+sub("\\b", "_", "the dandelion war 2010")
+
+gsub("\\b", "_", "the dandelion war 2010")
+
+# replace non-word with '_'
+sub("\\B", "_", "the dandelion war 2010")  
+
+gsub("\\B", "_", "the dandelion war 2010")
+```
+
+####Word boundaries and non-word-boundaries
+
+```{r}
+# replace word boundary with '_'
+sub("\\w", "_", "the dandelion war 2010") 
+
+gsub("\\w", "_", "the dandelion war 2010") 
+
+# replace non-word-boundary with '_'
+sub("\\W", "_", "the dandelion war 2010") ## [1] "the_dandelion war 2010" 
+
+gsub("\\W", "_", "the dandelion war 2010")
+```
+
+
+
+
+####Character Classes -regex character classes
+#### matching patterns
+
+```{r}
+# some string
+transport = c("car", "bike", "plane", "boat")
+
+grep(pattern = "[ei]", transport, value = TRUE)
+
+
+# some numeric strings
+numerics = c("123", "17-April", "I-II-III", "R 3.0.1")
+
+# match strings with 0 or 1
+grep(pattern = "[01]", numerics, value = TRUE)
+
+
+# match any digit
+grep(pattern = "[0-9]", numerics, value = TRUE)
+
+# negated digit
+grep(pattern = "[^0-9]", numerics, value = TRUE)
+
+```
+
+
+####POSIX Character Classes
+
+```{r}
+# la vie (string)
+la_vie = "La vie en #FFC0CB (rose);\nCes't la vie! \ttres jolie 78"
+
+# if you print 'la_vie'
+print(la_vie)
+
+# if you cat 'la_vie'
+cat(la_vie)
+```
+
+
+```{r}
+# remove space characters
+gsub(pattern = "[[:blank:]]", replacement = "", la_vie)
+
+# remove  puntuations
+gsub(pattern = "[[:punct:]]", replacement = "", la_vie)
+
+# remove digits
+gsub(pattern = "[[:xdigit:]]", replacement = "", la_vie)
+
+# remove printable characters
+gsub(pattern = "[[:print:]]", replacement = "", la_vie)
+
+# remove non-printable characters
+gsub(pattern = "[^[:print:]]", replacement = "", la_vie)
+
+# remove graphical characters
+gsub(pattern = "[[:graph:]]", replacement = "", la_vie) 
+
+# remove non-graphical characters
+gsub(pattern = "[^[:graph:]]", replacement = "", la_vie)
+
+#remove non alphabet characters
+gsub("[^[:alpha:]]", "", la_vie)
+
+```
+
+
+
+####Quantifiers
+set of regex elements are the so-called quantifiers. These are used when we want to match a certain number of characters that meet certain criteria.
+
+```{r}
+# people names
+people = c("rori", "emilia", "matteo", "mehmet", "filipe", "anna", "tyler",
+    "rasmus", "jacob", "youna", "flora", "adi")
+
+# match 'm' at most once
+# ? The preceding item is optional and will be matched at most once
+grep(pattern = "m?", people, value = TRUE)
+
+
+```
+
+```{r}
+# match 'm' exactly once
+#{n} The preceding item is matched exactly n times
+grep(pattern = "m{1}", people, value = TRUE, perl = FALSE) 
+
+#{n,m} The preceding item is matched at least n times, but not more than m times
+grep(pattern = "m{1,1}", people, value = TRUE, perl = FALSE) 
+
+
+#{n,} The preceding item is matched n or more times
+grep(pattern = "m{1,}", people, value = TRUE, perl = FALSE) 
+
+```
+
+
+```{r}
+# match 'm' zero or more times, and 't'
+grep(pattern = "m*t", people, value = TRUE)
+
+
+
+```
+
+
+
+```{r}
+# * The preceding item will be matched zero or more times
+grep(pattern = "t*m", people, value = TRUE)
+
+
+```
+
+```{r}
+# match 'm' one or more times
+# + The preceding item will be matched one or more times
+grep(pattern = "m+", people, value = TRUE)
+```
+
+
+
+```{r}
+# match 'm' one or more times, and 't'
+grep(pattern = "m+.t", people, value = TRUE)
+
+# match 't' exactly twice
+grep(pattern = "t{2}", people, value = TRUE)
+
+```
+
+
+
+####Functions for Regular Expressions
+
+
+
+
+```{r}
+#grep()      finding regex matches    which elements are matched (index or value)       
+# grepl()     finding regex matches   which elements are matched (TRUE & FALSE    
+# regexpr()     finding regex matches     positions of the first match
+# gregexpr()     finding regex matches    positions of all matches
+# regexec()      finding regex matches     hybrid of regexpr() and gregexpr()
+# sub()         replacing regex matches     only first match is replaced
+# gsub()        replacing regex matches     all matches are replaced
+# strsplit()     splitting regex matches      split vector according to matches
+
+ 
+```
+
+
+
+
+####Regex functions in stringr
+
+```{r}
+#Function          Description
+# str detect()       Detect the presence or absence of a pattern in a string   
+# str extract()      Extract first piece of a string that matches a pattern
+# str extract all()   Extract all pieces of a string that match a pattern
+#str match()      Extract first matched group from a string   
+# str match all()   Extract all matched groups from a string
+#str locate()       Locate the position of the first occurence of a pattern in a string
+# str locate all() Locate the position of all occurences of a pattern in a string
+#str replace()      Replace first occurrence of a matched pattern in a string
+# str replace all()   Replace all occurrences of a matched pattern in a string
+#str split()        Split up a string into a variable number of pieces
+# str split fixed()      Split up a string into a fixed number of pieces
+```
+
+the important things to keep in mind is that all pattern matching functions in stringr have the following general form:
+str_function(string, pattern)
+
+####Complementary matching functions
+```{r}
+# Function        Purpose                             Characteristic
+# regmatches()     extract or replace matches          use with data from regexpr(), #                                                              gregexpr() or regexec()
+# match()         value matching                     finding positions of (first) matches
+# pmatch()        partial string matching            finding positions
+# charmatch()    similar to pmatch()                   finding positions
+```
+
+
+
+
+
+
+
+####Accessory functions accepting regex patterns
+
+```{r}
+# Function     Description
+# apropos()     find objects by (partial) name
+# browseEnv()     browse objects in environment
+# glob2rx()      change wildcard or globbing pattern into Regular Expression
+# help.search()    search the help system
+# list.files()     list the files in a directory/folder
+```
+
+
+
+
+
+####Regular Expressions
+
+####Pattern Finding Functions
+
+
+The first five grep()-like functions grep(), grepl(), regexpr(), gregexpr(), and regexec(). The goal is the same for all these functions: finding a match. The difference between them is in the format of the output. Essentially these functions require two main arguments: a pattern (i.e. regular expression), and a text to match.
+
+ grep(pattern, text)
+ grepl(pattern, text)
+ regexpr(pattern, text)
+ gregexpr(pattern, text)
+ regexec(pattern, text)
+ 
+ 
+ 
+#### Function grep()
+
+
+grep() is perhaps the most basic functions that allows us to match a pattern in a string vector. The first argument in grep() is a regular expression that specifies the pattern to match.
+
+```{r}
+# some text
+text = c("one word", "a sentence", "you and me", "three two one")
+# pattern
+pat = "one"
+# default usage
+grep(pat, text)
+
+```
+
+ 
+ 
+ 
+ 
+```{r}
+# with 'value' (showing matched text)
+grep(pat, text, value = TRUE)
+```
+
+```{r}
+# with 'invert' (showing unmatched parts)
+grep(pat, text, invert = TRUE)
+
+# same with 'values'
+grep(pat, text, invert = TRUE, value = TRUE)
+```
+
+
+
+
+####Function regexpr()
+To find exactly where the pattern is found in a given string, we can use the regexpr()
+function. This function returns more detailed information than grep() providing us:
+a) which elements of the text vector actually contain the regex pattern, and
+b) identifies the position of the substring that is matched by the regular expression pattern.
+
+
+```{r}
+# some text
+text = c("one word", "a sentence", "you and me", "three two one")
+# default usage
+regexpr("one", text)
+```
+At first glance the output from regexpr() may look a bit messy but it’s very simple to interpret. What we have in the output are three displayed elements. The first element is an integer vector of the same length as text giving the starting positions of the first match. In this example the number 1 indicates that the pattern "one" starts at the position 1 of the first element in text. The negative index -1 means that there was no match; the number 11 indicates the position of the substring that was matched in the fourth element of text.
+The attribute "match.length" gives us the length of the match in each element of text. Again, a negative value of -1 means that there was no match in that element. Finally, the attribute "useBytes" has a value of TRUE which means that the matching was done byte-by-byte rather than character-by-character.
+
+####Function gregexpr()
+The function gregexpr() does practically the same thing as regexpr(): identify where a pattern is within a string vector, by searching each element separately. The only difference is that gregexpr() has an output in the form of a list. In other words, gregexpr() returns a list of the same length as text, each element of which is of the same form as the return value for regexpr(), except that the starting positions of every (disjoint) match are given.
+
+
+
+
+```{r}
+# some text
+text = c("one word", "a sentence", "you and me", "three two one")
+# pattern
+pat = "one"
+# default usage
+gregexpr(pat, text)
+
+```
+
+
+
+
+####Function regexec()
+The function regexec() is very close to gregexpr() in the sense that the output is also a list of the same length as text. Each element of the list contains the starting position of the match. A value of -1 reflects that there is no match. In addition, each element of the list has the attribute "match.length" giving the lengths of the matches (or -1 for no match):
+
+
+
+```{r}
+# some text
+text = c("one word", "a sentence", "you and me", "three two one")
+# pattern
+pat = "one"
+# default usage
+regexec(pat, text)
+
+```
+
+
+
+
+```{r}
+# handy function to extract matched term
+x = regexpr(pat, text)
+
+substring(text, x, x + attr(x, "match.length") - 1)
+
+# with NA
+regexpr(pat, c(text, NA))
+
+```
+
+
+
+####Pattern Replacement Functions
+Sometimes finding a pattern in a given string vector is all we want. However, there are occasions in which we might also be interested in replacing one pattern with another one. For this purpose we can use the substitution functions sub() and gsub(). The difference between sub() and gsub() is that the former replaces only the first occurrence of a pattern whereas the latter replaces all occurrences.
+The replacement functions require three main arguments: a regex pattern to be matched, a replacement for the matched pattern, and the text where matches are sought. The basic usage is:
+ sub(pattern, replacement, text)
+ gsub(pattern, replacement, text)
+ 
+#### Replacing first occurrence with sub()
+The function sub() replaces the first occurrence of a pattern in a given text. This means that if there is more than one occurrence of the pattern in each element of a string vector, only the first one will be replaced. For example, suppose we have the following text vector containing various strings:
+
+```{r}
+# string
+Rstring = c("The R Foundation",
+            "for Statistical Computing",
+            "R is FREE software",
+            "R is a collaborative project")
+# substitute 'R' with 'RR'
+sub("R", "RR", Rstring)
+
+```
+
+
+
+
+####Replacing all occurrences with gsub()
+To replace not only the first pattern occurrence, but all of the occurrences we should use gsub() (think of it as general substition). If we take the same vector Rstring and patterns of the last example, this is what we obtain when we apply gsub()
+
+```{r}
+# string
+Rstring = c("The R Foundation",
+            "for Statistical Computing",
+            "R is FREE software",
+            "R is a collaborative project")
+# substitute 'R' with 'RR'
+gsub("R", "RR", Rstring)
+
+```
+
+
+####Splitting Character Vectors
+Besides the operations of finding patterns and replacing patterns, another common task is splitting a string based on a pattern. To do this R comes with the function strsplit() which is designed to split the elements of a character vector into substrings according to regex matches.
+If you check the help documentation —help(strsplit)— you will see that the basic usage of strsplit() requires two main arguments:
+ strsplit(x, split)
+x is the character vector and split is the regular expression pattern. However, in order to keep the same notation that we’ve been using with the other grep() functions, it is better if we think of x as text, and split as pattern. In this way we can express the usage of strsplit() as:
+ strsplit(text, pattern)
+ strsplit(text, pattern)
+ 
+```{r}
+# a sentence
+sentence = c("R is a collaborative project with many contributors")
+# split into words
+strsplit(sentence, " ")
+```
+
+
+
+```{r}
+# telephone numbers
+tels = c("510-548-2238", "707-231-2440", "650-752-1300")
+# split each number into its portions
+strsplit(tels, "-")
+```
+
+
+####Functions in stringr
+In the previous chapter we briefly presented the functions of the R package stringr for regular expressions. As we mentioned, all the stringr functions share a common usage structure:
+ str_function(string, pattern)
+The main two arguments are: a string vector to be processed , and a single pattern (i.e. regular expression) to match. Moreover, all the function names begin with the prefix str , followed by the name of the action to be performed. For example, to locate the position of the first occurence, we should use str locate(); to locate the positions of all matches we should use str locate all()
+
+####Detecting patterns with str detect()
+For detecting whether a pattern is present (or absent) in a string vector, we can use the
+function str detect(). Actually, this function is a wraper of grepl():
+```{r}
+# some objects
+some_objs = c("pen", "pencil", "marker", "spray")
+
+# detect phones
+str_detect(some_objs, "pen")
+
+# select detected macthes
+some_objs[str_detect(some_objs, "pen")]
+
+```
+
+
+The pattern matches dates of the form day-month-year:
+```{r}
+# some strings
+strings = c("12 Jun 2002", " 8 September 2004 ", "22-July-2009 ",
+            "01 01 2001", "date", "02.06.2000",
+            "xxx-yyy-zzzz", "$2,600")
+
+# date pattern (month as text)
+dates = "([0-9]{1,2})[- .]([a-zA-Z]+)[- .]([0-9]{4})" # detect dates
+str_detect(strings, dates)
+
+```
+
+
+
+#### Extract first match with str extract()
+For extracting a string containing a pattern, we can use the function str extract(). In fact, this function extracts the first piece of a string that matches a given pattern. For example, imagine that we have a character vector with some tweets about Paris, and that we want to extract the hashtags. We can do this simply by defining a #hashtag pattern like #[a-zA-Z]{1}
+
+
+```{r}
+# tweets about 'Paris'
+paris_tweets = c(
+  "#Paris is chock-full of cultural and culinary attractions",
+  "Some time in #Paris along Canal St.-Martin famous by #Amelie",
+  "While you're in #Paris, stop at cafe: http://goo.gl/yaCbW",
+  "Paris, the city of light")
+# hashtag pattern
+
+hash = "#[a-zA-Z]{1,}"
+
+# extract (first) hashtag
+str_extract(paris_tweets, hash)
+
+```
+
+
+
+####Extract all matches with str extract all()
+In addition to str extract(), stringr also provides the function str extract all(). As its name indicates, we use str extract all() to extract all patterns in a vector string. Taking the same string as in the previous example, we can extract all the hashtag matches like so:
+
+
+```{r}
+# extract (all) hashtags
+str_extract_all(paris_tweets, "#[a-zA-Z]{1,}")
+```
+
+####Extract first match group with str match()
+Closely related to str extract() the package stringr offers another extracting function:
+str match(). This function not only extracts the matched pattern but it also shows each of
+the matched groups in a regex character class pattern.
+
+
+```{r}
+# string vector
+strings = c("12 Jun 2002", " 8 September 2004 ", "22-July-2009 ",
+            "01 01 2001", "date", "02.06.2000",
+            "xxx-yyy-zzzz", "$2,600")
+# date pattern (month as text)
+dates = "([0-9]{1,2})[- .]([a-zA-Z]+)[- .]([0-9]{4})"
+
+# extract first matched group
+str_match(strings, dates)
+
+```
+
+
+####Extract all matched groups with str match all()
+If what we’re looking for is extracting all patterns in a string vector, instead of using
+str extract() we should use str extract all():
+
+```{r}
+# tweets about 'Paris'
+paris_tweets = c(
+  "#Paris is chock-full of cultural and culinary attractions",
+  "Some time in #Paris along Canal St.-Martin famous by #Amelie",
+  "While you're in #Paris, stop at cafe: http://goo.gl/yaCbW",
+  "Paris, the city of light")
+
+# match (all) hashtags in 'paris_tweets'
+str_match_all(paris_tweets, "#[a-zA-Z]{1,}")
+
+
+
+```
+
+####Locate first match with str locate()
+Besides detecting, extracting and matching regex patterns, stringr allows us to locate oc- curences of patterns. For locating the position of the first occurence of a pattern in a string vector, we should use str locate().
+
+```{r}
+# locate position of (first) hashtag
+str_locate(paris_tweets, "#[a-zA-Z]{1,}")
+```
+
+####Locate all matches with str locate all()
+To locate not just the first but all the occurence patterns in a string vector, we should use
+str locate all():
+
+
+```{r}
+# locate (all) hashtags in 'paris_tweets'
+str_locate_all(paris_tweets, "#[a-zA-Z]{1,}")
+
+```
+
+
+
+####Replace first match with str replace()
+For replacing the first occurrence of a matched pattern in a string, we can use str replace().
+Its usage has the following form:
+str_replace(string, pattern, replacement)
+
+In addition to the main 2 inputs of the rest of functions, str replace() requires a third
+argument that indicates the replacement pattern.
+Say we have the city names of San Francisco, Barcelona, Naples and Paris in a vector. And let’s suppose that we want to replace the first vowel in each name with a semicolon. Here’s how we can do that:
+
+
+```{r}
+# city names
+cities = c("San Francisco", "Barcelona", "Naples", "Paris")
+
+# replace first matched vowel
+str_replace(cities, "[aeiou]", ";")
+
+```
+
+Now, suppose that we want to replace the first consonant in each name. We just need to modify the pattern with a negated class:
+
+```{r}
+# replace first matched consonant
+str_replace(cities, "[^aeiou]", ";")
+```
+
+
+
+####Replace all matches with str replace all()
+For replacing all occurrences of a matched pattern in a string, we can use str replace all(). Once again, consider a vector with some city names, and let’s suppose that we want to replace all the vowels in each name:
+
+
+```{r}
+# city names
+cities = c("San Francisco", "Barcelona", "Naples", "Paris")
+
+# replace all matched vowel
+str_replace_all(cities, pattern = "[aeiou]", ";")
+
+```
+
+To replace all consonants with a semicolon in each name, we just need to change the pattern with a negated class:
+
+```{r}
+# replace all matched consonants
+str_replace_all(cities, pattern = "[^aeiou]", ";")
+
+```
+
+####String splitting with str split()
+Similar to strsplit(), stringr gives us the function str split() to separate a character
+vector into a number of pieces. This function has the following usage:
+str_split(string, pattern, n = Inf)
+The argument n is the maximum number of pieces to return. The default value (n = Inf)
+implies that all possible split positions are used.
+Let’s see the same example of strsplit() in which we wish to split up a sentence into individuals words:
+
+
+```{r}
+# a sentence
+sentence = c("R is a collaborative project with many contributors")
+
+# split into words
+str_split(sentence, " ")
+
+```
+
+we can break apart the portions of a telephone number by splitting those sets of digits joined by a dash "-"
+
+
+```{r}
+# telephone numbers
+tels = c("510-548-2238", "707-231-2440", "650-752-1300")
+
+# split each number into its portions
+str_split(tels, "-")
+
+```
+
+
+ let’s consider a vector with flavors "chocolate", "vanilla", "cinnamon", "mint", and "lemon". Suppose we want to split each flavor name defining as pattern the class of vowels:
+ 
+ 
+ 
+ 
+```{r}
+# string
+flavors = c("chocolate", "vanilla", "cinnamon", "mint", "lemon")
+
+# split by vowels
+str_split(flavors, "[aeiou]")
+```
+
+
+
+Now let’s modify the maximum number of pieces to n = 2. This means that str split() will split each element into a maximum of 2 pieces. Here’s what we obtain:
+
+
+```{r}
+# split by first vowel
+str_split(flavors, "[aeiou]", n = 2)
+
+```
+
+
+
+####String splitting with str split fixed()
+In addition to str split(), there is also the str split fixed() function that splits up a
+string into a fixed number of pieces. Its usage has the following form:
+str_split_fixed(string, pattern, n)
+Note that the argument n does not have a default value. In other words, we need to specify
+an integer to indicate the number of pieces.
+Consider again the same vector of flavors, and the letter "n" as the pattern to match. Let’s
+see the behavior of str split fixed() with n = 2.
+
+```{r}
+# string
+flavors = c("chocolate", "vanilla", "cinnamon", "mint", "lemon")
+
+# split flavors into 2 pieces
+str_split_fixed(flavors, "n", 2)
+
+```
+
+
+If we change the value n = 3, we will obtain a matrix with three columns:
+
+```{r}
+# split favors into 3 pieces
+str_split_fixed(flavors, "n", 3)
+```
+
+
+
+####Practical Applications
+#####Reversing a string
+
+
+```{r}
+# function that reverses a string by characters
+reverse_chars <- function(string) {
+  # split string by characters
+  string_split = strsplit(string, split = "")
+  # reverse order
+  rev_order = nchar(string):1
+  # reversed characters
+  reversed_chars = string_split[[1]][rev_order]
+  # collapse reversed characters
+paste(reversed_chars, collapse="") }
+
+```
+
+
+
+```{r}
+# try 'reverse_chars'
+reverse_chars("abcdefg")
+
+```
+
+
+
+```{r}
+# reversing a string by characters
+reverse_chars <- function(string) {
+  string_split = strsplit(as.character(string), split = "")
+  reversed_split = string_split[[1]][nchar(string):1]
+  paste(reversed_split, collapse="")
+}
+```
+
+
+
+```{r}
+# example with one word
+reverse_chars("atmosphere")
+
+# example with a several words
+reverse_chars("the big bang theory")
+```
+
+
+```{r}
+# try 'reverse_chars'
+reverse_chars("abcdefg")
+
+# try with non-character input
+reverse_chars(12345)
+```
+
+
+
+
+```{r}
+# reverse vector (by characters)
+lapply(c("the big bang theory", "atmosphere"), reverse_chars)
+```
+
+
+
+####Reversing a string by words
+The second type of reversing operation is to reverse a string by words. In this case the procedure involves splitting up a string by words, re-arrange them in reverse order, and paste them back in one sentence. Here’s how we can defined our reverse words() function:
+
+
+```{r}
+# # function that reverses a string by words
+# reverse_words <- function(string) {
+#   # split string by blank spaces
+#   string_split = strsplit(as.character(string), split = " ")
+#   # how many split terms?
+#   string_length = length(string_split[[1]])
+#   # decide what to do
+# if (string_length == 1) {
+# # one word (do nothing) reversed_string = string_split[[1]]
+# } else {
+# # more than one word (collapse them)
+# reversed_split = string_split[[1]][string_length:1] reversed_string = paste(reversed_split, collapse = " ")
+# }
+# # output
+# return(reversed_string) }
+```
+
+
+
+```{r}
+# examples
+# reverse_words("atmosphere")
+# 
+# reverse_words("the big bang theory")
+```
+
+```{r}
+# reverse vector (by words)
+#lapply(c("the big bang theory", "atmosphere"), reverse_words)
+```
+
+
+####Matching e-mail addresses
+
+
+The second practical example that we will discuss consists of matching an email address. We will work with usual email addresses having one (or a similar variant) of the following forms:
+  somename@email.com
+  somename99@email.com
+  some.name@email.com
+  some.name@an-email.com
+  some.name@an.email.com
+Since our goal is to match an email address, this implies that we need to define a corresponding regex pattern. If we look at the previous email forms it is possible to see that they have a general structure that can be broken into three parts. The first part is the username (e.g. somename99). The second part is an @ symbol. The third part is the domain name (e.g. an.email.com).
+The username pattern can be defined as:
+  ^([a-z0-9_\\.-]+)
+The username pattern starts with a caret ^ to indicate the beginning of the string. Then we have a group indicated with parentheses. It matches one or more lowercase letters, numbers, underscores, dots, or hyphens.
+The domain name pattern can be defined as:
+  ([\\da-z\\.-]+)\\.([a-z\\.]{2,6})$
+The domain name should be one or more lowercase letters, numbers, underscores, dots, or hyphens. Then another (escaped) dot, followed by an extension of two to six letters or dots. And finally the end of the string ($).
+The complete regular expression pattern (in R) for an email address is: "^([a-z0-9_\\.-]+)@([\\da-z\\.-]+)\\.([a-z\\.]{2,6})$"
+Let’s test our pattern with a minimalist example:
+
+
+```{r}
+T# pattern
+email_pat = "^([a-z0-9_\\.-]+)@([\\da-z\\.-]+)\\.([a-z\\.]{2,6})$" # string that matches
+grepl(pattern = email_pat, x = "gaston@abc.com")
+```
+
+
+```{r}
+# another string that matches
+grep(pattern = email_pat, x = "gaston.sanchez@research-center.fr")
+```
+
+```{r}
+# unmatched email (TLD too long)
+grep(pattern = email_pat, x = "gaston@abc.something")
+## integer(0)
+```
+
+
+
+
+```{r}
+# potential email addresses
+emails = c(
+ "simple@example.com",
+ "johnsmith@email.gov",
+ "marie.curie@college.edu",
+ "very.common@example.com",
+ "a.little.lengthy.but.ok@dept.example.com",
+ "disposable.style.email.with+symbol@example.com",
+ "not_good@email.address")
+# detect pattern
+str_detect(string=emails, pattern=email_pat)
+```
+
+
+
+####Matching HTML elements
+
+####Getting SIG links
+The first step is to create a vector of character strings that will contain the lines of the mailing lists webpage. We can create this vector by simply passing the URL name to readLines():
+
+```{r}
+ # read html content
+library(tm)
+mail_lists = readLines("http://www.r-project.org/mail.html")
+mail_lists%>%head()
+```
+
+
+```{r}
+docs <- Corpus(VectorSource(mail_lists))
+docs
+```
+
+
+Once we’ve read the HTML content of the R mailing lists webpage, the next step is to define our regex pattern that matches the SIG links.
+  '^.*<td> *<a href="(https.*)">.*$'
+  
+  
+  
+  
+```{r}
+# SIG's href pattern
+sig_pattern = '^.*<td> *<a href="(https.*)">.*$'
+# find SIG href attributes
+sig_hrefs = grep(sig_pattern, mail_lists, value = TRUE)
+
+# let's see first 5 elements (shorten output)
+
+shorten_sigs = c()
+
+for (i in 1:5) {
+shorten_sigs[i] = toString(sig_hrefs[i], width=70) 
+}
+shorten_sigs
+```
+
+
+```{r}
+# get first matched group
+sub(sig_pattern, "\\1", sig_hrefs)
+```
+
+
+
+```{r}
+library(data.table)
+mydat <- fread('http://www.stats.ox.ac.uk/pub/datasets/csb/ch11b.dat')
+head(mydat)
+```
+
+
+####Text Analysis 
+
+Read TXT files with read.table()
+If you have a .txt or a tab-delimited text file, you can easily import it with the basic R function read.table(). In other words, the contents of your file will look similar to this
+
+
+
+```{r}
+# link of data set
+url = "http://norvig.com/big.txt"
+# read data (stringsAsFactors=FALSE)
+biomed = read.table(url, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+biomed%>%head()
+```
+
+```{r}
+# structure of the dataset
+str(biomed, vec.len = 1)
+```
+
+
+
+
+```{r}
+# remove punctuation
+biomed = str_replace_all(biomed, pattern = "[[:punct:]]", "")
+#biomed[[1]]%>%head()
+```
+
+
+```{r}
+# trim extra whitespaces
+biomed = str_replace_all(biomed, pattern = "\\s+", " ") 
+#biomed
+```
+
+
+
+
+```{r}
+# split titles by words
+biomed = str_split(biomed, pattern = " ")
+# show first 2 elements
+#biomed
+```
+
+
+```{r}
+# how many words per title
+words_biomed = sapply(biomed, length)
+# table of frequencies
+table(words_biomed)
+(words_biomed)
+```
+
+
+
+
+
+```{r}
+df <- read.table("https://s3.amazonaws.com/assets.datacamp.com/blog_assets/test.txt", 
+                 header = FALSE)
+df
+```
+
+
+```{r}
+
+
+library(RCurl)
+myfile <- getURL('https://sakai.unc.edu/access/content/group/3d1eb92e-7848-4f55-90c3-7c72a54e7e43/public/data/bycatch.csv', ssl.verifyhost=FALSE, ssl.verifypeer=FALSE)
+myfile%>%head()
+```
+
+What are the arguments ssl.verifyhost=F and ssl.verifypeer=F doing? To be quite honest, I don’t really know. But if I’m having trouble reading from a URL I try specifying these arguments and changing one or both to FALSE almost always circumvents whatever error I’m getting.
+This grabs the content residing at the specified URL, but doesn’t return a data.frame object. It has simply put the URL’s content into a string.
+
+
+```{r}
+class(myfile)
+```
+
+
+So how to get this into a data.frame object? We’ll use textConnection() to open a “connection” with the string, much like you would open a connection with a file on your hard drive in order to read it. Then we’ll have read.csv() (or you could use read.table() or fread() or similar) to read the string object like a text file and create a data.frame object.
+
+```{r}
+mydat <- read.csv(textConnection(myfile), header=T)
+head(mydat)
+```
+
+
+
+```{r}
+baseURL <- 'http://www.wunderground.com/history/airport/KMDW'
+suffixURL <- 'DailyHistory.html?HideSpecis=1&format=1'
+```
+
+
+
+```{r}
+Date <- Sys.Date()
+datestring <- format(Date, '%Y/%m/%d')
+datestring
+```
+
+
+
+```{r}
+url2fetch <- paste(baseURL, datestring, suffixURL, sep='/')
+url2fetch
+```
+
+
+```{r}
+getURL(paste(baseURL, datestring, suffixURL, sep='/'))
+```
+
+
+
+
+```{r}
+url_content <- getURL("https://www.wunderground.com/history/airport/KMDW/2017/07/29/DailyHistory.html?HideSpecis=1&format=1")
+url_content
+
+
+```
+
+
+
+
+```{r}
+weather_data <- read.csv(textConnection(url_content))
+
+#head(weather_data)%>%mutate(TimeCDT=as.POSIXct.Date(TimeCDT),DateUTC=as.POSIXct(DateUTC.br...))
+
+```
+
+
+
+```{r}
+# Read a delimited file
+df1 <- read.delim("https://s3.amazonaws.com/assets.datacamp.com/blog_assets/test_delim.txt", sep="$") 
+df2 <- read.delim2("https://s3.amazonaws.com/assets.datacamp.com/blog_assets/test_delim.txt", sep="$")
+
+# Inspect the result
+df1
+df2
+```
+

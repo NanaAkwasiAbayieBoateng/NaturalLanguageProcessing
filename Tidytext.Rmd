@@ -1,0 +1,1785 @@
+---
+title: "Tidytext"
+output: html_notebook
+---
+
+
+The infrastructure needed for text mining with tidy data frames already exists in packages like dplyr, broom, tidyr and ggplot2. In this package, we provide functions and supporting data sets to allow conversion of text to and from tidy formats, and to switch seamlessly between tidy tools and existing text mining packages.
+
+####A few first tidy text mining examples
+
+The novels of Jane Austen can be so tidy! Let’s use the text of Jane Austen’s 6 completed, published novels from the janeaustenr package, and transform them into a tidy format. janeaustenr provides them as a one-row-per-line format:
+
+
+
+```{r,warning=FALSE,message=FALSE}
+#install.packages("janeaustenr")
+#https://www.washingtonpost.com/graphics/2017/politics/australia-mexico-transcripts/?utm_term=.9289f7e3ffb1
+library(janeaustenr)
+library(tidyverse)
+library(stringr)
+library(tidytext)
+library(viridis)
+library(tidyr)
+library(reshape2)
+library(gutenbergr)
+require(graphics)
+library(ggthemes)
+
+austen_books() 
+
+original_books1<-austen_books() %>%  group_by(book) 
+
+original_books1%>%head()
+
+
+str(original_books1)
+
+summary(original_books1)
+```
+
+
+```{r}
+original_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]",
+                                                 ignore_case = TRUE)))) %>%
+  ungroup()
+
+original_books
+```
+
+
+To work with this as a tidy dataset, we need to restructure it as one-token-per-row format. The unnest_tokens function is a way to convert a dataframe with a text column to be one-token-per-row:
+
+```{r}
+tidy_books<-original_books %>%
+  unnest_tokens(word, text)
+
+tidy_books
+
+```
+
+
+
+This function uses the tokenizers package to separate each line into words. The default tokenizing is for words, but other options include characters, ngrams, sentences, lines, paragraphs, or separation around a regex pattern.
+
+Now that the data is in one-word-per-row format, we can manipulate it with tidy tools like dplyr. We can remove stop words (kept in the tidytext dataset stop_words) with an anti_join.
+
+```{r}
+data("stop_words")
+cleaned_books <- tidy_books %>%
+  anti_join(stop_words)
+```
+
+
+We can also use count to find the most common words in all the books as a whole.
+
+
+```{r}
+cleaned_books %>%
+  count(word, sort = TRUE) 
+```
+
+Sentiment analysis can be done as an inner join. Three sentiment lexicons are in the tidytext package in the sentiments dataset. Let’s look at the words with a joy score from the NRC lexicon. What are the most common joy words in Emma?
+
+```{r}
+nrcjoy <- get_sentiments("nrc") %>%
+  filter(sentiment == "joy")
+
+tidy_books %>%
+  filter(book == "Emma") %>%
+  semi_join(nrcjoy) %>%
+  count(word, sort = TRUE)
+```
+
+
+Or instead we could examine how sentiment changes during each novel. Let’s find a sentiment score for each word using the Bing lexicon, then count the number of positive and negative words in defined sections of each novel.
+
+
+```{r}
+
+bing <- get_sentiments("bing")
+
+bing%>%head() 
+```
+
+```{r}
+bing <- get_sentiments("bing")
+
+janeaustensentiment <-tidy_books %>%
+  inner_join(bing) 
+janeaustensentiment %>%head()
+
+```
+
+
+
+
+
+```{r}
+
+# x %/% y	integer division 5%/%2 is 2
+
+bing <- get_sentiments("bing")
+
+janeaustensentiment <- tidy_books %>%
+  inner_join(bing) %>%
+  count(book, index = linenumber %/% 80, sentiment)
+janeaustensentiment%>%head()
+
+```
+
+
+```{r}
+# spread in tidy package converts long table to wide
+bing <- get_sentiments("bing")
+
+janeaustensentiment <- tidy_books %>%
+  inner_join(bing) %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+tidyr::spread(sentiment, n, fill = 0)
+janeaustensentiment%>%head()
+
+```
+
+
+
+
+
+
+```{r}
+
+#Alternatively,converting to wide format
+
+bing <- get_sentiments("bing")
+
+janeaustensentiment <- tidy_books %>%
+  inner_join(bing) %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+reshape2::dcast(book+index~sentiment)
+janeaustensentiment%>%head()
+
+```
+
+
+
+
+```{r}
+
+
+
+bing <- get_sentiments("bing")
+
+janeaustensentiment <- tidy_books %>%
+  inner_join(bing) %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+janeaustensentiment%>%head()
+```
+
+
+Now we can plot these sentiment scores across the plot trajectory of each novel.
+
+```{r}
+##This plot shows more positive sentiments than negative
+
+ggplot(janeaustensentiment, aes(index, sentiment)) +
+  geom_bar(stat = "identity", show.legend = TRUE) 
+  #facet_wrap(~book, ncol = 2, scales = "free_x")
+```
+
+```{r}
+ggplot(janeaustensentiment, aes(index, sentiment, fill = book)) +
+  geom_bar(stat = "identity") 
+```
+
+
+
+```{r}
+ggplot(janeaustensentiment, aes(index, sentiment, fill = book)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+
+```
+
+
+
+#### Most common positive and negative words
+
+One advantage of having the data frame with both sentiment and word is that we can analyze word counts that contribute to each sentiment.
+
+```{r}
+bing_word_counts <- tidy_books %>%
+  inner_join(bing) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+bing_word_counts%>%head()
+
+```
+
+This can be shown visually, and we can pipe straight into ggplot2 because of the way we are consistently using tools built for handling tidy data frames.
+
+```{r}
+bing_word_counts %>%
+  filter(n > 150) %>%
+  mutate(n = if_else(sentiment == "negative", -n, n)) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Contribution to sentiment")
+
+
+
+
+bing_word_counts1<-bing_word_counts %>%
+  filter(n > 150) %>%
+  mutate(n = if_else(sentiment == "negative", -n, n))
+
+bing_word_counts1%>%head()
+
+
+
+
+bing_word_counts2<-bing_word_counts %>%
+  filter(n > 150) %>%
+  mutate(n = if_else(sentiment == "negative", -n, n)) %>%
+  mutate(word = reorder(word, n))
+
+bing_word_counts2%>%head()
+
+```
+
+
+
+```{r}
+bing_word_counts %>%
+  filter(n > 150) %>%
+  mutate(n = if_else(sentiment == "negative", -n, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_bar(stat = "identity") +
+  # element_text angle straihtens the text
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Contribution to sentiment")
+```
+
+
+
+```{r}
+#sort by mpg (ascending) and cyl (descending)
+# newdata <- mtcars[order(mpg, -cyl),] 
+# newdata 
+```
+
+
+
+```{r}
+bing_word_counts3=bing_word_counts %>%
+  filter(n > 150) %>%
+  mutate(n = if_else(sentiment == "negative", -n, n))
+  #sort by mpg (ascending) and cyl (descending)
+#bing_word_counts3<-bing_word_counts[order(n, word),]
+  #mutate(word=arrange(n))%>%
+  #group_by(word,n)%>%
+ #arrange(word,desc(n)) %>%
+bing_word_counts3%>%ggplot(aes(word, n, fill = sentiment)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Contribution to sentiment")
+
+
+
+```
+
+
+
+
+This lets us spot an anomaly in the sentiment analysis; the word “miss” is coded as negative but it is used as a title for young, unmarried women in Jane Austen’s works. If it were appropriate for our purposes, we could easily add “miss” to a custom stop-words list using bind_rows.
+
+####Wordclouds
+
+We’ve seen that this tidy text mining approach works well with ggplot2, but having our data in a tidy format is useful for other plots as well.
+
+For example, consider the wordcloud package. Let’s look at the most common words in Jane Austen’s works as a whole again.
+
+
+
+```{r,warning=FALSE,message=FALSE}
+library(wordcloud)
+
+cleaned_books %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 100))
+```
+
+In other functions, such as comparison.cloud, you may need to turn it into a matrix with reshape2’s acast. Let’s do the sentiment analysis to tag positive and negative words using an inner join, then find the most common positive and negative words. Until the step where we need to send the data to comparison.cloud, this can all be done with joins, piping, and dplyr because our data is in tidy format.
+
+
+```{r}
+tidy_books%>%head()
+```
+
+
+
+```{r,warning=FALSE,message=FALSE}
+library(reshape2)
+
+tidy_books1<-tidy_books %>%
+  inner_join(bing) %>%
+  count(word, sentiment, sort = TRUE) 
+ tidy_books1%>%head()
+```
+
+
+```{r}
+#fill=0 replaces NA in columns
+# acast works similar as dcast both in reshape2
+tidy_books2<-tidy_books %>%
+  inner_join(bing) %>%
+  count(word, sentiment, sort = TRUE) %>%
+ reshape2::dcast(word ~ sentiment,fill=0) 
+tidy_books2%>%head()
+```
+
+```{r}
+tidy_books2<-tidy_books %>%
+  inner_join(bing) %>%
+  count(word, sentiment, sort = TRUE) %>%
+reshape2::acast(word ~ sentiment, value.var = "n", fill = 0) 
+tidy_books2%>%head()
+```
+
+
+
+```{r,warning=FALSE,message=FALSE}
+
+tidy_books %>%
+  inner_join(bing) %>%
+  count(word, sentiment, sort = TRUE) %>%
+ reshape2::acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("#F8766D", "#00BFC4"),
+                   max.words = 100)
+```
+
+
+#####Looking at units beyond just words
+
+Lots of useful work can be done by tokenizing at the word level, but sometimes it is useful or necessary to look at different units of text. For example, some sentiment analysis algorithms look beyond only unigrams (i.e. single words) to try to understand the sentiment of a sentence as a whole. These algorithms try to understand that
+
+I am not having a good day.
+
+is a sad sentence, not a happy one, because of negation. The Stanford CoreNLP tools and the sentimentr R package (currently available on Github but not CRAN) are examples of such sentiment analysis algorithms. For these, we may want to tokenize text into sentences.
+
+
+
+
+```{r}
+PandP_sentences <- data_frame(text = prideprejudice) %>% 
+  unnest_tokens(sentence, text, token = "sentences")
+
+PandP_sentences
+```
+
+
+Let’s look at just one.
+
+```{r}
+PandP_sentences$sentence[2]
+```
+
+
+The sentence tokenizing does seem to have a bit of trouble with UTF-8 encoded text, especially with sections of dialogue; it does much better with punctuation in ASCII.
+
+Another option in unnest_tokens is to split into tokens using a regex pattern. We could use this, for example, to split the text of Jane Austen’s novels into a data frame by chapter.
+
+```{r}
+austen_chapters <- austen_books() %>%
+  group_by(book) %>%
+ # split text into words
+  unnest_tokens(chapter, text, token = "regex", pattern = "Chapter|CHAPTER [\\dIVXLC]") %>%
+  ungroup()
+
+austen_chapters %>% 
+  group_by(book) %>% 
+  summarise(chapters = n())
+```
+
+
+
+We have recovered the correct number of chapters in each novel (plus an “extra” row for each novel title). In this data frame, each row corresponds to one chapter.
+
+Near the beginning of this vignette, we used a similar regex to find where all the chapters were in Austen’s novels for a tidy data frame organized by one-word-per-row. We can use tidy text analysis to ask questions such as what are the most negative chapters in each of Jane Austen’s novels? First, let’s get the list of negative words from the Bing lexicon. Second, let’s make a dataframe of how many words are in each chapter so we can normalize for the length of chapters. Then, let’s find the number of negative words in each chapter and divide by the total words in each chapter. Which chapter has the highest proportion of negative words?
+
+
+```{r}
+bingnegative <- get_sentiments("bing") %>%
+  filter(sentiment == "negative")
+
+wordcounts <- tidy_books %>%
+  group_by(book, chapter) %>%
+  summarize(words = n())
+
+tidy_books %>%
+  semi_join(bingnegative) %>%
+  group_by(book, chapter) %>%
+  summarize(negativewords = n()) %>%
+  left_join(wordcounts, by = c("book", "chapter")) %>%
+  mutate(ratio = negativewords/words) %>%
+  filter(chapter != 0) %>%
+  top_n(1)
+```
+
+
+
+These are the chapters with the most negative words in each book, normalized for number of words in the chapter. What is happening in these chapters? In Chapter 43 of Sense and Sensibility Marianne is seriously ill, near death, and in Chapter 34 of Pride and Prejudice Mr. Darcy proposes for the first time (so badly!). Chapter 46 of Mansfield Park is almost the end, when everyone learns of Henry’s scandalous adultery, Chapter 15 of Emma is when horrifying Mr. Elton proposes, and in Chapter 21 of Northanger Abbey Catherine is deep in her Gothic faux fantasy of murder, etc. Chapter 4 of Persuasion is when the reader gets the full flashback of Anne refusing Captain Wentworth and how sad she was and what a terrible mistake she realized it to be.
+
+
+
+
+
+
+
+
+
+
+```{r}
+# Create a 4 level example factor
+trt <-factor( sample( c("PLACEBO", "300 MG", "600 MG", "1200 MG"),
+              100, replace=TRUE ) )
+summary(trt)
+
+
+
+
+```
+
+
+
+```{r}
+#install.packages("graphics")
+
+
+InsectSprays
+
+#reorder(spray, count, median)
+
+
+bymedian<-with(InsectSprays, reorder(spray, count, median))
+bymedian
+boxplot(count ~ bymedian, data = InsectSprays,
+        xlab = "Type of spray", ylab = "Insect count",
+        main = "InsectSprays data", varwidth = TRUE,
+        col = "lightgray")
+```
+
+
+```{r}
+#InsectSprays%>%group_by(spray)%>%dplyr::summarise(median)
+
+
+
+InsectSprays1=
+  InsectSprays%>%group_by(spray) %>%
+  dplyr::summarise(med=median(count,na.rm = TRUE))%>%arrange_at("med")
+
+
+InsectSprays1%>%head()
+
+
+boxplot(med ~ spray, data = InsectSprays1,
+        xlab = "Type of spray", ylab = "Insect count",
+        main = "InsectSprays data",
+        col = "lightgray")
+```
+
+
+
+
+
+####Chapter 3 Sentiment Analysis with Tidy Data
+
+#####3.1 The sentiments dataset
+
+There are a variety of methods and dictionaries that exist for evaluating the opinion or emotion in text. The tidytext package contains three sentiment lexicons in the sentiments dataset.
+
+
+```{r}
+sentiments
+```
+
+
+The three lexicons are
+
+* AFINN from Finn Årup Nielsen,
+* bing from Bing Liu and collaborators, and
+* nrc from Saif Mohammad and Peter Turney.
+All three of these lexicons are based on unigrams (or single words). These lexicons contain many English words and the words are assigned scores for positive/negative sentiment, and also possibly emotions like joy, anger, sadness, and so forth. The nrc lexicon categorizes words in a binary fashion (“yes”/“no”) into categories of positive, negative, anger, anticipation, disgust, fear, joy, sadness, surprise, and trust. The bing lexicon categorizes words in a binary fashion into positive and negative categories. The AFINN lexicon assigns words with a score that runs between -5 and 5, with negative scores indicating negative sentiment and positive scores indicating positive sentiment. All of this information is tabulated in the sentiments dataset.
+
+These dictionary-based methods find the total sentiment of a piece of text by adding up the individual sentiment scores for each word in the text. Not every English word is in the lexicons because many English words are pretty neutral. It is important to keep in mind that these methods do not take into account qualifiers before a word, such as in “no good” or “not true”; a lexicon-based method like this is based on unigrams only. For many kinds of text (like the narrative examples below), there are not sustained sections of sarcasm or negated text, so this is not an important effect.
+
+One last caveat is that the size of the chunk of text that we add up unigram sentiment scores for can have an important effect for an analysis. A paragraph-sized text can often have positive and negative sentiment averaged out to about zero, while sentence-sized text often works better.
+
+
+####3.2 Sentiment analysis with inner join
+
+With data in a tidy format, sentiment analysis can be done as an inner join. Let’s look at the words with a joy score from the NRC lexicon. What are the most common joy words in Emma?
+
+
+
+```{r}
+glimpse(sentiments)
+```
+
+```{r}
+sentiments%>%mutate(lexicon=as.factor(lexicon),sentiment=as.factor(sentiment))%>%str()
+sentiments%>%mutate(lexicon=as.factor(lexicon),sentiment=as.factor(sentiment))%>%summary()
+```
+
+```{r}
+tail(sentiments)
+```
+
+
+
+
+
+
+```{r}
+nrcjoy <- sentiments %>%
+  filter(lexicon == "nrc", sentiment == "joy")
+
+tidy_books %>%
+  filter(book == "Emma") %>%
+  semi_join(nrcjoy) %>%
+  count(word, sort = TRUE)
+```
+
+
+Or instead we could examine how sentiment changes during each novel. Let’s find a sentiment score for each word using the Bing lexicon, then count the number of positive and negative words in defined sections of each novel.
+
+```{r}
+bing <- sentiments %>%
+  filter(lexicon == "bing")
+bing%>%head()
+```
+```{r}
+bing <- sentiments %>%
+  filter(lexicon == "bing") %>%
+  select(-score)
+
+janeaustensentiment <- tidy_books %>%
+  inner_join(bing) 
+
+janeaustensentiment%>%head()
+
+janeaustensentiment <- tidy_books %>%
+  inner_join(bing) %>%
+  count(book, index = linenumber %/% 80, sentiment) 
+
+janeaustensentiment%>%head()
+
+
+janeaustensentiment <- tidy_books %>%
+  inner_join(bing) %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+janeaustensentiment%>%head()
+```
+
+Now we can plot these sentiment scores across the plot trajectory of each novel.
+
+```{r}
+
+ggplot(janeaustensentiment, aes(index, sentiment, fill = book)) +
+        geom_bar(stat = "identity", show.legend = FALSE) +
+        facet_wrap(~book, ncol = 2, scales = "free_x") +
+        theme_minimal(base_size = 13) +
+        labs(title = "Sentiment in Jane Austen's Novels",
+             y = "Sentiment") +
+        scale_fill_viridis(end = 0.75, discrete=TRUE, direction = -1) +
+        scale_x_discrete(expand=c(0.02,0)) +
+        theme(strip.text=element_text(hjust=0)) +
+  # change text into italics
+        theme(strip.text = element_text(face = "italic")) +
+  # strip horizontal  axis labels
+        theme(axis.title.x=element_blank()) +
+        theme(axis.ticks.x=element_blank()) +
+        theme(axis.text.x=element_blank())
+```
+
+
+```{r}
+ggplot(janeaustensentiment, aes(index, sentiment, fill = book)) +
+        geom_bar(stat = "identity", show.legend = FALSE) +
+        facet_wrap(~book, ncol = 2, scales = "free_x") +
+        theme_minimal(base_size = 13) +
+        labs(title = "Sentiment in Jane Austen's Novels",
+             y = "Sentiment") 
+```
+
+
+```{r}
+ggplot(janeaustensentiment, aes(index, sentiment, fill = book)) +
+        geom_bar(stat = "identity", show.legend = FALSE) +
+        facet_wrap(~book, ncol = 2, scales = "free_x") +
+        theme_minimal(base_size = 13) +
+        labs(title = "Sentiment in Jane Austen's Novels",
+             y = "Sentiment") +
+  # scale_fill_viridis adds pretty colors
+        scale_fill_viridis(end = 0.75, discrete=TRUE, direction = -1)+
+  #   scale_x_discrete strips x -axis labels
+        scale_x_discrete(expand=c(0.02,0))+
+  # position text to the left 
+        theme(strip.text=element_text(hjust=0))+
+  #  italize text
+        theme(strip.text = element_text(face = "italic"))+
+  #  strip index label
+        theme(axis.title.x=element_blank())+
+        theme(axis.ticks.x=element_blank())+
+        theme(axis.text.x=element_blank())
+```
+
+
+We can see here how the plot of each novel changes toward more positive or negative sentiment over the trajectory of the story.
+
+TODO: The three different methods of calculating sentiment give results that are different in an absolute sense but have similar relative trajectories through the novel.
+
+####3.3 Most common positive and negative words
+
+One advantage of having the data frame with both sentiment and word is that we can analyze word counts that contribute to each sentiment.
+
+```{r}
+bing_word_counts <- tidy_books %>%
+  inner_join(bing) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+bing_word_counts%>%head()
+```
+
+```{r}
+bing_word_counts %>%
+  filter(n > 150) %>%
+  mutate(n = ifelse(sentiment == "negative", -n, n)) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Contribution to sentiment")+
+  scale_fill_viridis(end = 0.85, discrete=TRUE, direction = 1)
+```
+
+
+####Text Analysis of Jane Austins Northanger Abbey
+
+```{r,warning=FALSE,message=FALSE}
+
+#extract the chapters in all books
+
+original_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]",
+                                                 ignore_case = TRUE)))) %>%ungroup()
+
+original_books%>%head()
+
+#split text into words
+
+tidy_book<-original_books %>%
+  unnest_tokens(word, text)
+
+tidy_books%>%head()
+
+
+# Select book title Northanger Abbey
+
+Northanger_Abbey=tidy_books %>%
+  filter(book == "Northanger Abbey")
+
+Northanger_Abbey%>%head()
+
+# Bing lexicon which is simply a tibble with words and positive and negative words:
+
+get_sentiments("bing") %>% head
+
+
+N1=Northanger_Abbey%>%
+  # remove stop words
+  anti_join(stop_words, by = "word")
+
+N1%>%head()
+
+ 
+N2=Northanger_Abbey%>%
+  # remove stop words
+  anti_join(stop_words, by = "word") %>%
+  # add sentiment scores to words
+  inner_join(get_sentiments("bing"), by = "word")
+
+N2%>%head()
+
+
+N3=Northanger_Abbey%>%
+  # remove stop words
+  anti_join(stop_words, by = "word") %>%
+  # add sentiment scores to words
+  inner_join(get_sentiments("bing"), by = "word")  %>%
+  # count number of negative and positive words
+  count(chapter, book, sentiment,word)
+
+
+N3%>%head()
+
+
+
+ #custom stop words
+  
+custom_stop_words<-bind_rows(stop_words,
+                               data_frame(word = "miss",
+                                          lexicon = "custom"))
+N31=Northanger_Abbey%>%
+ # remove stop words
+  anti_join(custom_stop_words) %>%
+  # add sentiment scores to words
+  inner_join(get_sentiments("bing"), by = "word")  %>%
+  # count number of negative and positive words
+  count(chapter, book, sentiment,word,sort=TRUE)
+
+
+N31%>%head()
+
+
+N4=Northanger_Abbey%>%
+  # remove stop words
+  anti_join(stop_words, by = "word") %>%
+  # add sentiment scores to words
+  inner_join(get_sentiments("bing"), by = "word")  %>%
+  # count number of negative and positive words
+  count(chapter, book, sentiment,word)%>%
+  spread(key = sentiment, value = n)
+
+N4%>%head()
+
+
+
+
+
+
+
+
+N5=Northanger_Abbey%>%
+  # remove stop words
+  anti_join(stop_words, by = "word") %>%
+  # add sentiment scores to words
+  inner_join(get_sentiments("bing"), by = "word")  %>%
+  # count number of negative and positive words
+  count(chapter, book, sentiment)%>%
+  spread(key = sentiment, value = n)%>%
+  #  ungroup() removes grouping.
+  ungroup
+
+N5%>%head()
+
+N6=Northanger_Abbey%>%
+  # remove stop words
+  anti_join(stop_words, by = "word") %>%
+  # add sentiment scores to words
+  inner_join(get_sentiments("bing"), by = "word")  %>%
+  # count number of negative and positive words
+  count(chapter, book, sentiment)%>%
+  spread(key = sentiment, value = n)%>%
+  #  ungroup() removes grouping.
+  ungroup%>%
+  # create centered score
+  mutate(sentiment = positive - negative - 
+           mean(positive - negative),m=mean(positive - negative))
+ 
+N6%>%head()
+
+
+
+N7=Northanger_Abbey%>%
+  # remove stop words
+  anti_join(stop_words, by = "word") %>%
+  # add sentiment scores to words
+  inner_join(get_sentiments("bing"), by = "word")  %>%
+  # count number of negative and positive words
+  count(chapter, book, sentiment)%>%
+  spread(key = sentiment, value = n)%>%
+  #  ungroup() removes grouping.
+  ungroup%>%
+  # create centered score
+  mutate(sentiment = positive - negative - 
+           mean(positive - negative))%>%
+  select(book, chapter, sentiment)
+
+N7%>%head()
+
+Northanger_Abbey%>%
+  # remove stop words
+  anti_join(stop_words, by = "word") %>%
+  # add sentiment scores to words
+  inner_join(get_sentiments("bing"), by = "word")  %>%
+  # count number of negative and positive words
+  count(chapter, book, sentiment)%>%
+  spread(key = sentiment, value = n)%>%
+  #  ungroup() removes grouping.
+  ungroup%>%
+  # create centered score
+  mutate(sentiment = positive - negative - 
+           mean(positive - negative))%>%
+  select(book, chapter, sentiment)%>%
+  # plot
+  ggplot(aes(x = chapter, y = sentiment)) + 
+  geom_bar(stat = "identity", aes(fill = book)) + 
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90)) + 
+  coord_flip()+
+  scale_fill_viridis(end = 0.75, discrete=TRUE, direction = -1)
+ 
+ 
+ 
+
+#Plot words with frequency > 3 by 
+N3%>%
+filter(n > 3) %>%
+  mutate(n = ifelse(sentiment == "negative", -n, n)) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Contribution to sentiment")
+
+#Plot words with frequency > 3 by  count /remove miss as a stop word
+N31%>%
+filter(n > 3) %>%
+  mutate(n = ifelse(sentiment == "negative", -n, n)) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Contribution to sentiment")
+
+
+#Plot words with frequency > 3 by  count /remove miss as a stop word
+N31%>%
+filter(n > 3) %>%
+  mutate(n = ifelse(sentiment == "negative", -n, n)) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(reorder(word, n), n, fill = sentiment)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Contribution to sentiment")
+
+
+
+# Northanger_Abbey%>%
+#  # remove stop words
+#   anti_join(custom_stop_words) %>%
+#   # add sentiment scores to words
+#   inner_join(get_sentiments("bing"), by = "word")  %>%
+#   # count number of negative and positive words
+#  # count(chapter, book, sentiment,word,sort=TRUE)
+#   count(word, sentiment, sort = TRUE) %>%
+#  reshape2::acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+#   comparison.cloud(colors = c("#F8766D", "#00BFC4"),
+#                    max.words = 200)
+
+
+#plot word by sentiment
+bing <- get_sentiments("bing")
+
+Northanger_Abbey%>%
+  inner_join(bing) %>%
+  count(word, sentiment, sort = TRUE) %>%
+ reshape2::acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("#F8766D", "#00BFC4"),
+                   max.words = 100)
+
+
+
+# remove miss
+Northanger_Abbey%>%
+  anti_join(custom_stop_words) %>%
+  inner_join(bing) %>%
+  count(word, sentiment, sort = TRUE) %>%
+ reshape2::acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("#F8766D", "#00BFC4"),
+                   max.words = 100)
+```
+
+
+
+
+```{r,message=FALSE,warning=FALSE}
+Northanger_Abbey%>%
+  # remove stop words
+  anti_join(stop_words, by = "word") %>%
+  # add sentiment scores to words
+  inner_join(get_sentiments("bing"), by = "word")  %>%
+  # count number of negative and positive words
+  count( sentiment,word)%>%
+        group_by(sentiment) %>%
+        top_n(10) %>%
+        ggplot(aes(reorder(word, n), n, fill = sentiment)) +
+          geom_bar(alpha = 0.8, stat = "identity", show.legend = FALSE) +
+          facet_wrap(~sentiment, scales = "free_y") +
+          labs(y = "Contribution to sentiment", x = NULL) +
+          coord_flip()+theme_igray()
+ 
+
+```
+
+
+
+
+The argument token = "sentences" attempts to break up text by punctuation. For most text this will have little impact but it is important to be aware of. You can also unnest text by “ngrams”, “lines”, “paragraphs”, and even using “regex”. Check out ?unnest_tokens for more details.
+
+```{r,message=FALSE,warning=FALSE}
+#extract the chapters in all books
+
+original_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]",
+                                                 ignore_case = TRUE)))) %>%ungroup()
+
+original_books%>%head()
+
+#split text into sentences
+
+tidy_sentence<-original_books %>%
+unnest_tokens(sentence, text, token = "sentences")
+
+tidy_sentence%>%head()
+
+tidy_sentence%>%tail()
+
+
+
+
+tidy_sent <-tidy_sentence %>%
+        group_by(chapter) %>%
+        mutate(sentence_num = 1:n(),
+               index = round(sentence_num / n(), 2)) %>%
+        unnest_tokens(word, sentence) %>%
+        inner_join(get_sentiments("afinn")) %>%
+        group_by(chapter, index) %>%
+        summarise(sentiment = sum(score, na.rm = TRUE)) %>%
+        arrange(desc(sentiment))
+
+tidy_sent%>%head()
+
+tidy_sent1=tidy_sent%>%select(chapter,index,sentiment)%>%group_by(chapter)%>%
+  arrange(desc(sentiment,chapter))%>%
+  top_n(20)
+
+tidy_sent1
+```
+
+
+```{r}
+
+ggplot(tidy_sent1, aes(index, factor(chapter, levels = sort(unique(chapter), decreasing = TRUE)), fill = sentiment)) +
+        geom_tile(color = "white") +
+        scale_fill_gradient2() +
+        scale_x_continuous(labels = scales::percent, expand = c(0, 0)) +
+        scale_y_discrete(expand = c(0, 0)) +
+        labs(x = "Chapter Progression", y = "Chapter") +
+        ggtitle("Sentiment of Jane Austen's Northanger Abbey",
+                subtitle = "Summary of the net sentiment score as you progress through each chapter") +
+        theme_minimal() +
+        theme(panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              legend.position = "top")
+```
+
+
+
+
+
+
+
+#####unnest_tokens {tidytext}	R Documentation
+Split a column into tokens using the tokenizers package
+
+Description
+
+Split a column into tokens using the tokenizers package, splitting the table into one-token-per-row. unnest_tokens_ is the standard evaluation version.
+
+Usage
+
+unnest_tokens(tbl, output, input, token = "words", format = c("text", "man",
+  "latex", "html", "xml"), to_lower = TRUE, drop = TRUE, collapse = NULL,
+  ...)
+
+unnest_tokens_(tbl, output, input, token = "words", format = c("text",
+  "man", "latex", "html", "xml"), to_lower = TRUE, drop = TRUE,
+  collapse = NULL, ...)
+Arguments
+
+tbl	
+Data frame
+output	
+Output column to be created as bare name.
+input	
+Input column that gets split as bare name.
+token	
+Unit for tokenizing, or a custom tokenizing function. Built-in options are "words" (default), "characters", "ngrams", "skip_ngrams", "sentences", "lines", "paragraphs", and "regex". If a function, should take a character vector and return a list of character vectors of the same length.
+format	
+Either "text", "man", "latex", "html", or "xml". If not text, this uses the hunspell tokenizer, and can tokenize only by "word"
+to_lower	
+Whether to turn column lowercase.
+drop	
+Whether original input column should get dropped. Ignored if the original input and new output column have the same name.
+collapse	
+Whether to combine text with newlines first in case tokens (such as sentences or paragraphs) span multiple lines. If NULL, collapses when token method is "ngrams", "skip_ngrams", "sentences", "lines", "paragraphs", or "regex".
+...	
+Extra arguments passed on to the tokenizer, such as n and k for "ngrams" and "skip_ngrams" or pattern for "regex".
+Details
+
+If the unit for tokenizing is ngrams, skip_ngrams, sentences, lines, paragraphs, or regex, the entire input will be collapsed together before tokenizing.
+
+If format is anything other than "text", this uses the hunspell_parse tokenizer instead of the tokenizers package. This does not yet have support for tokenizing by any unit other than words.
+
+
+```{r}
+library(dplyr)
+library(janeaustenr)
+
+d <- data_frame(txt = prideprejudice)
+d
+
+d %>%
+  unnest_tokens(word, txt)
+
+d %>%
+  unnest_tokens(sentence, txt, token = "sentences")
+
+d %>%
+  unnest_tokens(ngram, txt, token = "ngrams", n = 2)
+
+d %>%
+  unnest_tokens(ngram, txt, token = "skip_ngrams", n = 4, k = 2)
+
+d %>%
+  unnest_tokens(chapter, txt, token = "regex", pattern = "Chapter [\\d]")
+
+# custom function
+d %>%
+  unnest_tokens(word, txt, token = stringr::str_split, pattern = " ")
+
+# tokenize HTML
+h <- data_frame(row = 1:2,
+                text = c("<h1>Text <b>is<b>", "<a href='example.com'>here</a>"))
+
+h %>%
+  unnest_tokens(word, text, format = "html")
+
+```
+
+
+
+
+
+
+####Tidy Topic Modeling
+
+
+
+Topic modeling is a method for unsupervised classification of documents, by modeling each document as a mixture of topics and each topic as a mixture of words. Latent Dirichlet allocation is a particularly popular method for fitting a topic model.
+
+We can use tidy text principles, as described in the main vignette, to approach topic modeling using consistent and effective tools. In particular, we’ll be using tidying functions for LDA objects from the topicmodels package.
+
+#####Can we tell the difference between Dickens, Wells, Verne, and Austen?
+
+Suppose a vandal has broken into your study and torn apart four of your books:
+
++Great Expectations by Charles Dickens
++The War of the Worlds by H.G. Wells
++Twenty Thousand Leagues Under the Sea by Jules Verne
++Pride and Prejudice by Jane Austen
+This vandal has torn the books into individual chapters, and left them in one large pile. How can we restore these disorganized chapters to their original books?
+#linenumber = row_number()
+
+
+#####Contrasting tidy text with other data structures
+
+As we stated above, we define the tidy text format as being a table with one-token-per-row. Structuring text data in this way means that it conforms to tidy data principles and can be manipulated with a set of consistent tools. This is worth contrasting with the ways text is often stored in text mining approaches.
+
+*String: Text can, of course, be stored as strings, i.e., character vectors, within R, and often text data is first read into memory in this form.
+*Corpus: These types of objects typically contain raw strings annotated with additional metadata and details.
+*Document-term matrix: This is a sparse matrix describing a collection (i.e., a corpus) of documents with one row for each document and one column for each term. The value in the matrix is typically word count or tf-idf (see Chapter 3).
+Let’s hold off on exploring corpus and document-term matrix objects until Chapter 5, and get down to the basics of converting text to a tidy format.
+
+######1.2 The unnest_tokens function
+
+Emily Dickinson wrote some lovely text in her time.
+
+```{r}
+text <- c("Because I could not stop for Death -",
+          "He kindly stopped for me -",
+          "The Carriage held but just Ourselves -",
+          "and Immortality")
+
+text
+```
+
+
+
+
+```{r}
+library(dplyr)
+text_df <-tibble::data_frame(line=1:4, text = text)
+
+text_df
+```
+
+Within our tidy text framework, we need to both break the text into individual tokens (a process called tokenization) and transform it to a tidy data structure. To do this, we use tidytext’s unnest_tokens() function.
+
+```{r}
+library(tidytext)
+
+text_df %>%
+  unnest_tokens(word, text)
+```
+
+
+```{r}
+data(stop_words)
+stop_words%>%head()
+```
+
+
+
+##### Word frequencies
+
+A common task in text mining is to look at word frequencies, just like we have done above for Jane Austen’s novels, and to compare frequencies across different texts. We can do this intuitively and smoothly using tidy data principles. We already have Jane Austen’s works; let’s get two more sets of texts to compare to. First, let’s look at some science fiction and fantasy novels by H.G. Wells, who lived in the late 19th and early 20th centuries. Let’s get The Time Machine, The War of the Worlds, The Invisible Man, and The Island of Doctor Moreau. We can access these works using gutenberg_download() and the Project Gutenberg ID numbers for each novel.
+
+```{r}
+library(gutenbergr)
+
+hgwells <- gutenberg_download(c(35, 36, 5230, 159))
+hgwells%>%head()
+```
+
+```{r,warning=FALSE,message=FALSE}
+tidy_hgwells <- hgwells %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words)
+```
+
+
+
+The most common words in these novels of H.G. Wells
+
+
+```{r}
+tidy_hgwells %>%
+  count(word, sort = TRUE)%>%head()
+```
+
+Now, let’s calculate the frequency for each word for the works of Jane Austen, the Brontë sisters, and H.G. Wells by binding the data frames together. We can use spread and gather from tidyr to reshape our dataframe so that it is just what we need for plotting and comparing the three sets of novels
+
+
+```{r}
+bronte <- gutenberg_download(c(1260, 768, 969, 9182, 767))
+tidy_bronte <- bronte %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words)
+```
+
+
+
+The most common words in these novels of the Brontë sisters
+```{r}
+tidy_bronte %>%
+  count(word, sort = TRUE)
+```
+
+
+
+
+
+```{r}
+
+bind_rows(mutate(tidy_bronte, author = "Brontë Sisters"),
+                       mutate(tidy_hgwells, author = "H.G. Wells"), 
+                       mutate(tidy_books, author = "Jane Austen"))
+
+bind_rows(mutate(tidy_bronte, author = "Brontë Sisters"),
+                       mutate(tidy_hgwells, author = "H.G. Wells"), 
+                       mutate(tidy_books, author = "Jane Austen")) %>% 
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  count(author, word) %>%
+  group_by(author) %>%
+  mutate(proportion = n / sum(n))
+
+
+bind_rows(mutate(tidy_bronte, author = "Brontë Sisters"),
+                       mutate(tidy_hgwells, author = "H.G. Wells"), 
+                       mutate(tidy_books, author = "Jane Austen")) %>% 
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  count(author, word) %>%
+  group_by(author) %>%
+  mutate(proportion = n / sum(n)) %>% 
+  select(-n) %>% 
+  spread(author, proportion)
+
+frequency <- bind_rows(mutate(tidy_bronte, author = "Brontë Sisters"),
+                       mutate(tidy_hgwells, author = "H.G. Wells"), 
+                       mutate(tidy_books, author = "Jane Austen")) %>% 
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  count(author, word) %>%
+  group_by(author) %>%
+  mutate(proportion = n / sum(n)) %>% 
+  select(-n) %>% 
+  spread(author, proportion) %>% 
+  gather(author, proportion, `Brontë Sisters`:`H.G. Wells`)
+
+frequency
+```
+
+We use str_extract() here because the UTF-8 encoded texts from Project Gutenberg have some examples of words with underscores around them to indicate emphasis (like italics). The tokenizer treated these as words, but we don’t want to count “_any_” separately from “any” as we saw in our initial data exploration before choosing to use str_extract().
+
+
+```{r,message=FALSE,warning=FALSE}
+library(scales)
+
+# expect a warning about rows with missing values being removed
+ggplot(frequency, aes(x = proportion, y = `Jane Austen`, color = abs(`Jane Austen` - proportion))) +
+  geom_abline(color = "gray40", lty = 2) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.001), low = "darkslategray4", high = "gray75") +
+  facet_wrap(~author, ncol = 2) +
+  theme(legend.position="none") +
+  labs(y = "Jane Austen", x = NULL)
+
+```
+
+
+Words that are close to the line in these plots have similar frequencies in both sets of texts, for example, in both Austen and Brontë texts (“miss”, “time”, “day” at the upper frequency end) or in both Austen and Wells texts (“time”, “day”, “brother” at the high frequency end). Words that are far from the line are words that are found more in one set of texts than another. For example, in the Austen-Brontë panel, words like “elizabeth”, “emma”, and “fanny” (all proper nouns) are found in Austen’s texts but not much in the Brontë texts, while words like “arthur” and “dog” are found in the Brontë texts but not the Austen texts. In comparing H.G. Wells with Jane Austen, Wells uses words like “beast”, “guns”, “feet”, and “black” that Austen does not, while Austen uses words like “family”, “friend”, “letter”, and “dear” that Wells does not.
+
+Overall, notice in Figure 1.3 that the words in the Austen-Brontë panel are closer to the zero-slope line than in the Austen-Wells panel. Also notice that the words extend to lower frequencies in the Austen-Brontë panel; there is empty space in the Austen-Wells panel at low frequency. These characteristics indicate that Austen and the Brontë sisters use more similar words than Austen and H.G. Wells. Also, we see that not all the words are found in all three sets of texts and there are fewer data points in the panel for Austen and H.G. Wells.
+
+Let’s quantify how similar and different these sets of word frequencies are using a correlation test. How correlated are the word frequencies between Austen and the Brontë sisters, and between Austen and Wells?
+
+```{r}
+cor.test(data = frequency[frequency$author == "Brontë Sisters",],
+         ~ proportion + `Jane Austen`)
+```
+
+
+
+```{r}
+cor.test(data = frequency[frequency$author == "H.G. Wells",], 
+         ~ proportion + `Jane Austen`)
+```
+
+
+
+#####Converting to and from Document-Term Matrix and Corpus objects
+
+######Tidying document-term matrices
+
+Many existing text mining datasets are in the form of a DocumentTermMatrix class (from the tm package). For example, consider the corpus of 2246 Associated Press articles from the topicmodels package:
+
+```{r,message=FALSE,warning=FALSE}
+library(tm)
+data("AssociatedPress", package = "topicmodels")
+AssociatedPress
+```
+
+If we want to analyze this with tidy tools, we need to turn it into a one-term-per-document-per-row data frame first. The tidy function does this. (For more on the tidy verb, see the broom package).
+
+```{r}
+library(dplyr)
+library(tidytext)
+
+ap_td <- tidy(AssociatedPress)
+```
+
+
+
+Just as shown in this vignette, having the text in this format is convenient for analysis with the tidytext package. For example, you can perform sentiment analysis on these newspaper articles.
+
+
+```{r}
+ap_sentiments <- ap_td %>%
+  inner_join(get_sentiments("bing"), by = c(term = "word"))
+
+ap_sentiments%>%head()
+```
+
+
+We can find the most negative documents:
+
+
+```{r}
+library(tidyr)
+
+ap_sentiments %>%
+  count(document, sentiment, wt = count) %>%
+  ungroup() %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>%
+  arrange(sentiment)%>%head()
+```
+
+
+visualize which words contributed to positive and negative sentiment:
+
+```{r}
+library(ggplot2)
+
+ap_sentiments %>%
+  count(sentiment, term, wt = count) %>%
+  ungroup() %>%
+  filter(n >= 150) %>%
+  mutate(n = ifelse(sentiment == "negative", -n, n)) %>%
+  mutate(term = reorder(term, n)) %>%
+  ggplot(aes(term, n, fill = sentiment)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Contribution to sentiment")
+```
+
+
+
+Note that a tidier is also available for the dfm class from the quanteda package:
+
+
+```{r,message=FALSE,warning=FALSE}
+# devtools packaged required to install quanteda from Github 
+#devtools::install_github("kbenoit/quanteda")
+library(methods)
+library(quanteda)
+
+
+data("data_corpus_inaugural", package = "quanteda")
+#d <- quanteda::dfm(data_corpus_inaugural, verbose = FALSE)
+
+#d%>%head()
+
+```
+
+
+
+
+####Casting tidy text data into a DocumentTermMatrix
+
+Some existing text mining tools or algorithms work only on sparse document-term matrices. Therefore, tidytext provides cast_ verbs for converting from a tidy form to these matrices.
+
+
+```{r}
+ap_td%>%head()
+```
+
+
+```{r}
+# cast into a Document-Term Matrix
+ap_td %>%
+  cast_dtm(document, term, count)
+```
+
+
+
+```{r}
+# cast into a Term-Document Matrix
+ap_td %>%
+  cast_tdm(term, document, count)
+
+```
+
+
+
+```{r}
+# cast into quanteda's dfm
+ap_td %>%
+  cast_dfm(term, document, count)
+```
+
+
+
+
+
+```{r}
+# cast into a Matrix object
+m <- ap_td %>%
+  cast_sparse(document, term, count)
+class(m)
+dim(m)
+```
+
+
+This allows for easy reading, filtering, and processing to be done using dplyr and other tidy tools, after which the data can be converted into a document-term matrix for machine learning applications.
+
+#####Tidying corpus data
+
+You can also tidy Corpus objects from the tm package. For example, consider a Corpus containing 20 documents, one for each
+```{r}
+reut21578 <- system.file("texts", "crude", package = "tm")
+
+reut21578
+
+reuters <- VCorpus(DirSource(reut21578),
+                   readerControl = list(reader = readReut21578XMLasPlain))
+
+reuters
+```
+
+
+The tidy verb creates a table with one row per document:
+
+
+```{r}
+reuters_td <- tidy(reuters)
+reuters_td
+```
+
+
+
+Similarly, you can tidy a corpus object from the quanteda package:
+
+```{r}
+library(quanteda)
+
+data("data_corpus_inaugural")
+
+data_corpus_inaugural
+```
+
+
+
+```{r}
+inaug_td <- tidy(data_corpus_inaugural)
+inaug_td
+```
+
+This lets us work with tidy tools like unnest_tokens to analyze the text alongside the metadata.
+
+```{r}
+inaug_words <- inaug_td %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words)
+
+inaug_words%>%head()
+```
+
+
+We could then, for example, see how the appearance of a word changes over time:
+
+```{r}
+inaug_freq <- inaug_words %>%
+  count(Year, word) %>%
+  ungroup() %>%
+  complete(Year, word, fill = list(n = 0)) %>%
+  group_by(Year) %>%
+  mutate(year_total = sum(n),
+         percent = n / year_total) %>%
+  ungroup()
+
+inaug_freq%>%head()
+```
+
+
+```{r}
+library(dplyr, warn.conflicts = FALSE)
+df <- data_frame(
+  group = c(1:2, 1),
+  item_id = c(1:2, 2),
+  item_name = c("a", "b", "b"),
+  value1 = 1:3,
+  value2 = 4:6
+)
+df
+df %>% complete(group, nesting(item_id, item_name))
+
+# You can also choose to fill in missing values
+df %>% complete(group, nesting(item_id, item_name), fill = list(value1 = 0))
+# You can also choose to fill in missing values
+df %>% complete(group, nesting(item_id, item_name), fill =list(value1 =0,value2 =0))
+```
+
+
+
+
+
+For example, we can use the broom package to perform logistic regression on each word.
+
+
+```{r}
+models <- inaug_freq %>%
+  group_by(word) %>%
+  filter(sum(n) > 50) %>%
+  do(tidy(glm(cbind(n, year_total - n) ~ Year, .,
+              family = "binomial"))) %>%
+  ungroup() %>%
+  filter(term == "Year")
+
+models%>%head()
+```
+
+
+
+```{r}
+models %>%
+  filter(term == "Year") %>%
+  arrange(desc(abs(estimate)))%>%head()
+```
+
+You can show these models as a volcano plot, which compares the effect size with the significance:
+
+```{r}
+library(ggplot2)
+
+models %>%
+  mutate(adjusted.p.value = p.adjust(p.value)) %>%
+  ggplot(aes(estimate, adjusted.p.value)) +
+  geom_point() +
+  scale_y_log10() +
+  geom_text(aes(label = word), vjust = 1, hjust = 1,
+            check_overlap = TRUE) +
+  xlab("Estimated change over time") +
+  ylab("Adjusted p-value")+theme_bw()
+```
+
+
+We can also use the ggplot2 package to display the top 6 terms that have changed in frequency over time.
+
+
+```{r,message=FALSE,warning=FALSE}
+library(scales)
+
+models %>%
+  top_n(6, abs(estimate)) %>%
+  inner_join(inaug_freq) %>%
+  ggplot(aes(Year, percent)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(~ word) +
+  scale_y_continuous(labels = percent_format()) +
+  ylab("Frequency of word in speech")+theme_bw()
+```
+
+
+
+
+#####Does sentiment analysis work? A tidy analysis of Yelp reviews
+
+Sentiment analysis is often used by companies to quantify general social media opinion (for example, using tweets about several brands to compare customer satisfaction). One of the simplest and most common sentiment analysis methods is to classify words as “positive” or “negative”, then to average the values of each word to categorize the entire document. (See this vignette and Julia’s post for examples of a tidy application of sentiment analysis). But does this method actually work? Can you predict the positivity or negativity of someone’s writing by counting words?
+
+To answer this, let’s try sentiment analysis on a text dataset where we know the “right answer”- one where each customer also quantified their opinion. In particular, we’ll use the Yelp Dataset: a wonderful collection of millions of restaurant reviews, each accompanied by a 1-5 star rating. We’ll try out a specific sentiment analysis method, and see the extent to which we can predict a customer’s rating based on their written opinion. In the process we’ll get a sense of the strengths and weaknesses of sentiment analysis, and explore another example of tidy text mining with tidytext, dplyr, and ggplot2.
+
+
+####Setup
+
+I’ve downloaded the yelp_dataset_challenge_academic_dataset folder from here.1 First I read and process them into a data frame:
+
+
+```{r}
+library(readr)
+library(dplyr)
+
+# we're reading only 200,000 in this example
+# you can try it with the full dataset too, it's just a little slower to process!
+infile <- "~/Downloads/yelp_dataset_challenge_academic_dataset/yelp_academic_dataset_review.json"
+review_lines <- read_lines(infile, n_max = 200000, progress = FALSE)
+```
+
+
+
+```{r}
+library(stringr)
+library(jsonlite)
+
+# Each line is a JSON object- the fastest way to process is to combine into a
+# single JSON string and use fromJSON and flatten
+reviews_combined <- str_c("[", str_c(review_lines, collapse = ", "), "]")
+
+reviews <- fromJSON(reviews_combined) %>%
+  flatten() %>%
+  tbl_df()
+```
+
+
+We now have a data frame with one row per review:
+
+```{r}
+reviews
+```
+
+
+
+
+Notice the stars column with the star rating the user gave, as well as the text column (too large to display) with the actual text of the review. For now, we’ll focus on whether we can predict the star rating based on the text.
+
+####Tidy sentiment analysis
+
+Right now, there is one row for each review. To analyze in the tidy text framework, we need to use the unnest_tokens function and turn this into one-row-per-term-per-document:
+
+
+```{r}
+library(tidytext)
+
+review_words <- reviews %>%
+  select(review_id, business_id, stars, text) %>%
+  unnest_tokens(word, text) %>%
+  filter(!word %in% stop_words$word,
+         str_detect(word, "^[a-z']+$"))
+
+review_words
+```
+
+
+
+Notice that there is now one-row-per-term-per-document: the tidy text form. In this cleaning process we’ve also removed “stopwords” (such as “I”, “the”, “and”, etc), and removing things things that are formatting (e.g. “—-“) rather than a word.
+
+Now let’s perform sentiment analysis on each review. We’ll use the AFINN lexicon, which provides a positivity score for each word, from -5 (most negative) to 5 (most positive). This, along with several other lexicons, are stored in the sentiments table that comes with tidytext. (I’ve tried some other lexicons on this dataset and the results are pretty similar.)
+
+```{r}
+AFINN <- sentiments %>%
+  filter(lexicon == "AFINN") %>%
+  select(word, afinn_score = score)
+
+AFINN
+```
+
+
+
+```{r}
+reviews_sentiment <- review_words %>%
+  inner_join(AFINN, by = "word") %>%
+  group_by(review_id, stars) %>%
+  summarize(sentiment = mean(afinn_score))
+
+reviews_sentiment
+```
+
+
+We now have an average sentiment alongside the star ratings. If we’re right and sentiment analysis can predict a review’s opinion towards a restaurant, we should expect the sentiment score to correlate with the star rating.
+
+Did it work?
+We now have an average sentiment alongside the star ratings. If we’re right and sentiment analysis can predict a review’s opinion towards a restaurant, we should expect the sentiment score to correlate with the star rating.
+
+Did it work?
+
+
+```{r}
+
+library(ggplot2)
+theme_set(theme_bw())
+
+ggplot(reviews_sentiment, aes(stars, sentiment, group = stars)) +
+  geom_boxplot() +
+  ylab("Average sentiment score")
+```
+
+
+Well, it’s a very good start! Our sentiment scores are certainly correlated with positivity ratings. But we do see that there’s a large amount of prediction error- some 5-star reviews have a highly negative sentiment score, and vice versa.
+
+Which words are positive or negative?
+
+Our algorithm works at the word level, so if we want to improve our approach we should start there. Which words are suggestive of positive reviews, and which are negative?
+
+To examine this, let’s create a per-word summary, and see which words tend to appear in positive or negative reviews. This takes more grouping and summarizing:
+
+```{r}
+review_words_counted <- review_words %>%
+  count(review_id, business_id, stars, word) %>%
+  ungroup()
+
+review_words_counted
+```
+
+
+
+```{r}
+word_summaries <- review_words_counted %>%
+  group_by(word) %>%
+  summarize(businesses = n_distinct(business_id),
+            reviews = n(),
+            uses = sum(n),
+            average_stars = mean(stars)) %>%
+  ungroup()
+
+word_summaries
+```
+
+
+
+
+We can start by looking only at words that appear in at least 200 (out of 200000) reviews. This makes sense both because rare words will have a noisier measurement (a few good or bad reviews could shift the balance), and because they’re less likely to be useful in classifying future reviews or text. I also filter for ones that appear in at least 10 businesses (others are likely to be specific to a particular restaurant).
+
+
+
+```{r}
+word_summaries_filtered <- word_summaries %>%
+  filter(reviews >= 200, businesses >= 10)
+
+word_summaries_filtered
+```
+
+
+What were the most positive and negative words?
+
+```{r}
+word_summaries_filtered %>%
+  arrange(desc(average_stars))
+```
+
+Looks plausible to me! What about negative?
+
+```{r}
+word_summaries_filtered %>%
+  arrange(average_stars)
+```
+
+
+Also makes a lot of sense. We can also plot positivity by frequency:
+
+```{r}
+ggplot(word_summaries_filtered, aes(reviews, average_stars)) +
+  geom_point() +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1, hjust = 1) +
+  scale_x_log10() +
+  geom_hline(yintercept = mean(reviews$stars), color = "red", lty = 2) +
+  xlab("# of reviews") +
+  ylab("Average Stars")
+```
+
+
+Note that some of the most common words (e.g. “food”) are pretty neutral. There are some common words that are pretty positive (e.g. “amazing”, “awesome”) and others that are pretty negative (“bad”, “told”).
+
+Comparing to sentiment analysis
+
+When we perform sentiment analysis, we’re typically comparing to a pre-existing lexicon, one that may have been developed for a particular purpose. That means that on our new dataset (Yelp reviews), some words may have different implications.
+
+We can combine and compare the two datasets with inner_join.
+
+```{r}
+words_afinn <- word_summaries_filtered %>%
+  inner_join(AFINN)
+
+words_afinn
+```
+
+
+
+```{r}
+ggplot(words_afinn, aes(afinn_score, average_stars, group = afinn_score)) +
+  geom_boxplot() +
+  xlab("AFINN score of word") +
+  ylab("Average stars of reviews with this word")
+```
+
