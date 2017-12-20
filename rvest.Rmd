@@ -664,6 +664,8 @@ WHERE NOT binary AND content LIKE '%TODO%'"
 todo_copies <- query_exec(sql, project = project, useLegacySql = FALSE)
 
 ```
+
+
 ```{r}
 library(tm)
 #install.packages("SnowballC")

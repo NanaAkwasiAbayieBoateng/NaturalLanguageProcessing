@@ -1,0 +1,6 @@
+git remote add origin https://github.com/NanaAkwasiAbayieBoateng/NaturalLanguageProcessing.git
+git config remote.origin.url git@github.com:NanaAkwasiAbayieBoateng/NaturalLanguageProcessing.git
+git pull -u origin master
+git push -u origin master
+
+
