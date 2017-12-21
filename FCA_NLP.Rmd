@@ -26,25 +26,17 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ** Introduction  Web Scraping **
 Web scraping is a technique for converting the data present in unstructured format (HTML tags) over the web to the structured format which can easily be accessed and used.
+Most of the data available over the web is not readily available. It is present in an unstructured format (HTML format) and is not downloadable. Therefore, it requires knowledge and expertise to use this data.
 
-
-
-Most of the data available over the web is not readily available. It is present in an unstructured format (HTML format) and is not downloadable. Therefore, it requires knowledge & expertise to use this data.
-
-
-How many times have his papers been cited
-We can locate useful data based on their CSS selectors, especially when the webpage uses semantic tag attributes. Let's use [selectorgadget] (http://selectorgadget.com/) to find out which css selector matches the "cited by". SelectGadget can be added an extension in  Google chrome. It is shown as a magnifying glass.
-column.
-Use read_html() to parse the html page.
+We can locate useful data based on their CSS selectors, especially when the webpage uses semantic tag attributes. We can use [selectorgadget] (http://selectorgadget.com/) to find out which css selector matches the "review". SelectGadget can be added an extension in  Google chrome. It is shown as a magnifying glass.
 
 ```{r}
-pacman::p_load(tidyverse,tidytext,viridis,rvest,tm,wordcloud,SnowballC)
+pacman::p_load(tidyverse,tidytext,viridis,rvest,tm,wordcloud,SnowballC,tidyquant)
 ```
 
 
 
-Specify the css selector in html_nodes() and extract the text with html_text(). Finally, change the string to
-numeric using as.numeric().
+We can specify the css selector in html_nodes() and extract the text with html_text(). We scrab over 1800 reviews of Fiat Chrysler Automobiles from glassdoor. There are about 155 webpages which contain these reviews.
 
 
 
@@ -52,7 +44,7 @@ numeric using as.numeric().
 
 
 ```{r}
-n=4
+n=155
 
 #The reviews has 155 pages,thus n=155
 
@@ -67,7 +59,41 @@ FCA_html[[1]]
 
 ```
 
+### Data Preparation
+We can remove all unwanted characters at this stage
 
+```{r}
+#Data-Preprocessing: removing '\n'
+FCA_html<-gsub("\n","",FCA_html)
+
+
+#remove all round brackets
+FCA_html<-FCA_html%>%str_replace_all("\\(|\\)", "")
+
+#remove all \\
+FCA_html<-FCA_html%>%str_replace_all("\\\\", "")
+
+
+#remove all non words and non numbers
+
+#FCA_html<-FCA_html%>%str_replace_all("[^A-Za-z0-9]", "")
+
+#remove all • 
+FCA_html<-FCA_html%>%str_replace_all("\\•  ", "")
+
+#remove all & 
+FCA_html<-FCA_html%>%str_replace_all("\\ & ", "")
+
+#remove all  non printable words
+FCA_html<-FCA_html%>%str_replace_all("[^[:print:]]", "")
+
+FCA_html<-FCA_html%>%gsub(pattern = "\\ /", replacement = "")
+
+#FCAindeed2<-FCAindeed2%>%stringi::stri_unescape_unicode()
+
+FCA_html[[1]]
+
+```
 
 
 
@@ -83,7 +109,7 @@ Convert the  text data to dataframe.
 GlassdoorPages <- data_frame(page = seq(1, n),
                       text = c(FCA_html))
 
-GlassdoorPages
+GlassdoorPages%>%head()
 ```
 
 
@@ -107,9 +133,24 @@ tidy_FCA <- tidy_FCA %>%
   anti_join(stop_words)
 
 
+
+
+```
+
+
+```{r}
+stop_word=data_frame(word=c("chrysler","fca","linklink","fiat","whatsappshar","auburn","twittershar"))
+tidy_FCA <- tidy_FCA %>%
+  anti_join(stop_words)
+
+
 tidy_FCA%>%head()
 
 ```
+
+
+
+
 
 Next, let’s implement the sentiment analysis.
 
@@ -161,7 +202,7 @@ FCA_sentiment %>%
     labs(y = "Relative frequency", x = "Page",
          title = "Sentiment analysis of FCA Glassdoor Reviews",
          subtitle = "Using the nrc lexicon")+theme_bw()+
- scale_fill_manual(values=viridis_pal(option = "D")(7))+
+ scale_fill_manual(values=viridis_pal(option = "A")(7))+
    scale_y_continuous(labels = scales::percent)
 
 
@@ -259,6 +300,25 @@ FCA_sentiment %>%
 ```
 
 
+
+
+The negative and positive sentiments distribution is similar with the negative sentiments having a higher peak. The negative reviews is evenly distributed as like the positive reviews.
+Neither  is clearly  superior over the other.
+
+```{r}
+ GlassdoorPages %>%
+    unnest_tokens(word, text)%>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE)%>%
+  spread(sentiment,n,fill=0)%>%
+  mutate(sentiment = positive -negative)%>%
+  ggplot(aes(x = sentiment)) +
+geom_density(color = palette_light()[1], fill = palette_light()[1], alpha = 0.8) +
+theme_tq()+xlim(c(-5,5))
+```
+
+
+
 ```{r}
 FCA_sentiment %>%
     count(sentiment, word) %>%
@@ -271,16 +331,16 @@ FCA_sentiment %>%
     geom_col(alpha = 0.8, show.legend = FALSE) +
     coord_flip() +
     scale_y_continuous(expand = c(0,0)) +
-    facet_wrap(~sentiment) +
+    facet_wrap(~sentiment,scales="free") +
    labs(y = "Total number of occurrences", x = "",
          title = "Sentiment analysis of FCA Glassdoor Reviews",
          subtitle = "Using the bing lexicon")+
 #scale_fill_manual(values=viridis_pal(option = "D")(8))+
  scale_fill_viridis(end = 0.75, discrete=TRUE, direction = -1) +
-        #scale_x_discrete(expand=c(0.02,0)) +
-       # theme(strip.text=element_text(hjust=0)) +
+        scale_x_discrete(expand=c(0.02,0)) +
+        theme(strip.text=element_text(hjust=0)) +
   # change text into italics
-       # theme(strip.text = element_text(face = "italic")) +
+        theme(strip.text = element_text(face = "italic")) +
   # strip horizontal  axis labels
         theme(axis.title.x=element_blank()) +
         theme(axis.ticks.x=element_blank()) +
@@ -291,14 +351,15 @@ FCA_sentiment %>%
 
 ```{r}
 bing_word_counts <-tidy_FCA %>%
-  inner_join(bing) %>%
+  inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
   ungroup()
 
-bing_word_counts%>%head()
+bing_word_counts%>%spread(sentiment,n,fill = 0)%>%top_n(10)
+bing_word_counts%>%spread(sentiment,n,fill = 0)%>%top_n(-10)%>%head(10)
 
 bing_word_counts %>%
- # filter(n > 1) %>%
+  filter(n > 3) %>%
   mutate(n = if_else(sentiment == "negative", -n, n)) %>%
   mutate(word = reorder(word, n)) %>%
   ggplot(aes(word, n, fill = sentiment)) +
@@ -366,6 +427,14 @@ This happens because of the words that are driving the sentiment score in these 
 
 corpus = Corpus(VectorSource(FCA_html))
 
+corpus = tm_map(corpus, tolower)
+corpus<- tm_map(corpus, stripWhitespace)
+corpus = tm_map(corpus, removeNumbers)
+corpus = tm_map(corpus, removeWords, stopwords("english"))
+stop_user=c("chrysler","fca","linklink","fiat","whatsappshar","auburn","twittershar","automobil","edit","delet","via","edit","delet","via","starstarstarstarstarwork","pdt","hill","facebookshar")
+corpus = tm_map(corpus, removeWords,stop_user )
+
+
 tdm <- TermDocumentMatrix(corpus,
                           control = list(removePunctuation = TRUE, 
                                       stopwords =  TRUE, 
@@ -396,7 +465,9 @@ frequencies
 
 
 ```{r}
-findFreqTerms(frequencies, lowfreq=20)
+
+findFreqTerms(frequencies, lowfreq=100)
+#%>%as_tibble()%>%top_n(10)
 ```
 
 Remove sparse terms
@@ -407,7 +478,8 @@ sparse
 
 What about associations between words? Let’s have a look at what other words had a high association with “love”.
 ```{r}
-findAssocs(dtm, "love", 0.8)
+
+findAssocs(frequencies, c("love","poor","flexible","horrible"), c(0.6,0.6,0.6,0.6))
 
 ```
 
@@ -417,9 +489,12 @@ findAssocs(dtm, "love", 0.8)
 
 
 ```{r}
-comparison.cloud(tdm,scale=c(4,.5),max.words=300,
+wc=Corpus(VectorSource(FCA_html[1:4]))
+wc <- TermDocumentMatrix(wc)
+wc=as.matrix(wc)
+comparison.cloud(wc,scale=c(4,.5),max.words=300,
 	random.order=FALSE,rot.per=.1,
-	colors=viridis_pal(option = "D")(4),
+	colors=palette_light()[1:4],
 	use.r.layout=FALSE,title.size=3)
 
 
@@ -429,34 +504,38 @@ comparison.cloud(tdm,scale=c(4,.5),max.words=300,
 
 
 ### High Frequency Words
+The most commonly words used in the reviews is plotted below.
 
 ```{r}
 v <-sort(rowSums(tdm),decreasing=TRUE)
 d <-data_frame(word = names(v),freq=v) %>%mutate(word = reorder(word, freq))
 head(d, 10)
 
-wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+wordcloud(words = d$word, freq = d$freq, min.freq = 3,
           max.words=200, random.order=FALSE, rot.per=0.35, 
           colors=brewer.pal(8, "Dark2"))
 
 d=d[1:20,]
 ggplot(d, aes(x=word,y=freq,fill="")) + 
  geom_bar(stat="identity")+theme_bw()+
-  theme(axis.text.x =element_text(angle =45,hjust = 1))
+  theme(axis.text.x =element_text(angle =45,hjust = 1))+
 #scale_fill_viridis(end = 0.85, discrete=TRUE, direction = 1)
-scale_fill_manual(values=viridis_pal(option = "D")(1))
-
+#scale_fill_manual(values=viridis_pal(option = "D")(1))
+scale_color_manual(values = palette_light()) +
+scale_fill_manual(values = palette_light())+
+  coord_flip()
 ```
-
 
 
 ### Word Cloud with Bing Lexicon
 
 ```{r}
 
+c("edit","delet","via","starstarstarstarstarwork","pdt","hill","facebookshar")
+
  GlassdoorPages %>%
     unnest_tokens(word, text)%>%
-  inner_join(bing) %>%
+  inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
  reshape2::acast(word ~ sentiment, value.var = "n", fill = 0) %>%
   comparison.cloud(colors = viridis_pal(option = "D")(2),
@@ -489,7 +568,7 @@ GlassdoorPages %>%
   count(word, sentiment, sort = TRUE)%>%
 filter(sentiment %in% c("negative","positive","joy","sadness"))%>%
 reshape2::acast(word ~ sentiment, value.var = "n", fill = 0)%>% 
-comparison.cloud(colors = c("#F8766D", "#00BFC4"),
+comparison.cloud(colors = viridis_pal(option = "D")(4),
                   max.words = 200)
 
 

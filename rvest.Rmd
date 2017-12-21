@@ -172,6 +172,76 @@ FCA_sentiment <- tidy_FCA %>%
 FCA_sentiment%>%head()
 ```
 
+
+
+
+```{r}
+ GlassdoorPages %>%
+unnest_tokens(word, text, token = "sentences")
+```
+
+
+```{r}
+ GlassdoorPages %>%
+unnest_tokens(word, text,token = "skip_ngrams", n = 4, k = 2)
+```
+
+
+
+
+```{r}
+ GlassdoorPages %>%
+unnest_tokens(word, text, token = "ngrams", n = 2)
+```
+
+```{r}
+tidy_descr_ngrams=GlassdoorPages %>%
+unnest_tokens(word, text, token = "ngrams", n = 2) %>%
+filter(!grepl("\\.|http",word)) %>%
+separate(word, c("word1", "word2"), sep = " ") %>%
+filter(!word1 %in% stop_words$word) %>%
+filter(!word2 %in% stop_words$word)
+tidy_descr_ngrams
+
+
+bigram_counts=tidy_descr_ngrams %>%
+count(word1, word2, sort = TRUE)
+bigram_counts %>%
+filter(n > 50) %>%
+
+ggplot(aes(x = reorder(word1,-n), y = reorder(word2,-n), fill = n)) +
+geom_tile(alpha = 0.8, color = "white") +
+scale_fill_gradientn(colours = c(palette_light()[[1]], palette_light()[[2]])) +
+coord_flip() +
+theme_tq() +
+theme(legend.position = "right") +
+theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+labs(x = "first word in pair",
+y = "second word in pair")
+
+```
+
+
+
+```{r}
+library(igraph)
+library(ggraph)
+bigram_graph =bigram_counts %>%
+filter(n > 30) %>%
+graph_from_data_frame()
+set.seed(1)
+a=grid::arrow(type = "closed", length = unit(.15, "inches"))
+ggraph(bigram_graph, layout = "fr") +
+geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+arrow = a, end_cap = circle(.07, 'inches')) +
+geom_node_point(color = palette_light()[1], size = 5, alpha = 0.8) +
+geom_node_text(aes(label = name), vjust = 1, hjust = 0.5) +
+theme_void()
+
+```
+
+
+
 Now we have all we need to see the relative changes in these sentiments over the years.
 
 ```{r}
@@ -677,7 +747,7 @@ FCAglassdoor2<-FCAglassdoor1%>%str_replace_all("\\•  ", "")
 
 corpus = Corpus(VectorSource(FCAglassdoor2))
 corpus = tm_map(corpus, tolower)
-corpus = tm_map(corpus, PlainTextDocument)
+#corpus = tm_map(corpus, PlainTextDocument)
 corpus = tm_map(corpus, removePunctuation)
 corpus = tm_map(corpus, removeNumbers)
 corpus = tm_map(corpus, removeWords, stopwords("english"))
@@ -864,5 +934,42 @@ GlassdoorPages %>%
     unnest_tokens(sentence, text, token = "sentences")%>%
   inner_join(get_sentiments("nrc"),by=c("sentence"="word")) %>%
   count(sentence, sentiment, sort = TRUE)
+```
+
+
+
+
+
+```{r}
+library(xml2)
+library(httr)
+library(rvest)
+library(purrr)
+library(dplyr)
+
+to_get <- seq(0, 150, 10)
+pb <- progress_estimated(length(to_get))
+
+map_chr(to_get, function(i) {
+  pb$tick()$print()
+  searchURL <- paste("http://pqasb.pqarchiver.com/djreprints/results.html?st=advanced&QryTxt=bankruptcy&sortby=CHRON&datetype=6&frommonth=01&fromday=01&fromyear=1908&tomonth=12&today=31&toyear=1908&By=&Title=&at_hist=article&at_hist=editorial_article&at_hist=front_page&type=historic&start=", i, sep="")
+  htmlWeb <- read_html(searchURL)
+  nodeWeb <- html_node(htmlWeb, "td > font.result_title > a")
+  textWeb <- html_text(nodeWeb)
+  Sys.sleep(sample(10, 1) * 0.1)
+  textWeb
+}) -> titles
+
+print(trimws(titles))
+```
+
+
+
+
+```{r}
+library(rvest)
+url = "http://google.com"
+download.file(url, destfile = "scrapedpage.html", quiet=TRUE)
+content <- read_html("scrapedpage.html")
 ```
 
