@@ -31,7 +31,7 @@ Most of the data available over the web is not readily available. It is present 
 We can locate useful data based on their CSS selectors, especially when the webpage uses semantic tag attributes. We can use [selectorgadget] (http://selectorgadget.com/) to find out which css selector matches the "review". SelectGadget can be added an extension in  Google chrome. It is shown as a magnifying glass.
 
 ```{r}
-pacman::p_load(tidyverse,tidytext,viridis,rvest,tm,wordcloud,SnowballC,tidyquant)
+pacman::p_load(tidyverse,tidytext,viridis,rvest,tm,wordcloud,SnowballC,tidyquant,ggridges,scales)
 ```
 
 
@@ -87,12 +87,30 @@ FCA_html<-FCA_html%>%str_replace_all("\\ & ", "")
 #remove all  non printable words
 FCA_html<-FCA_html%>%str_replace_all("[^[:print:]]", "")
 
-FCA_html<-FCA_html%>%gsub(pattern = "\\ /", replacement = "")
+#remove all \
+FCA_html<-FCA_html%>%str_replace_all(pattern = "\"", replacement = "")
 
 #FCAindeed2<-FCAindeed2%>%stringi::stri_unescape_unicode()
 
-FCA_html[[1]]
 
+# remove digits
+#FCA_html%>%str_replace_all(pattern = "[[:digit:]]+", replacement = "")
+#tm::removeNumbers(FCA_html)
+
+#### pattern for dates
+pattern ="\\(?\\d{4}\\)?[.-]? *\\d{2}[.-]? *[.-]?\\d{2}"
+
+date=FCA_html%>%str_extract_all(pattern)
+
+#FCA_html[[1]]%>%str_subset(pattern = "([0-9]{1,2})[- .]([a-zA-Z]+)[- .]([0-9]{4})")
+
+#FCA_html[[1]]
+
+#unlist(Date)
+
+Date=as.Date(unlist(date))
+
+#FCA_html_2=data_frame(Date=as.Date(unlist(date)),FCA_html)
 ```
 
 
@@ -106,10 +124,13 @@ get_sentiments(lexicon = "nrc")%>%
 Convert the  text data to dataframe.
 
 ```{r}
-GlassdoorPages <- data_frame(page = seq(1, n),
-                      text = c(FCA_html))
+GlassdoorPages <- data_frame(date=as.Date(unlist(date)),page = seq(1, n),
+                      text = c(FCA_html))%>%arrange(desc(date))
 
-GlassdoorPages%>%head()
+GlassdoorPages%>%head(5)
+GlassdoorPages%>%tail(5)
+
+
 ```
 
 
@@ -190,6 +211,39 @@ FCA_sentiment %>%
 
 
 
+
+```{r}
+FCA_sentiment %>%
+    count(date, page_total, sentiment) %>%
+    filter(sentiment %in% c("positive", "negative", 
+                            "joy", "trust","fear","sadness"))%>%
+    mutate(sentiment = as.factor(sentiment))
+```
+
+
+
+```{r}
+
+FCA_sentiment %>%
+    count(page, page_total, sentiment) %>%
+    filter(sentiment %in% c("positive", "negative", 
+                            "joy", "trust","fear","sadness"))%>%
+    mutate(sentiment = as.factor(sentiment)) %>%
+    #ggplot(aes(page, n / page_total, fill = sentiment)) +
+     ggplot(aes(x=page,y= n / sum(n), fill = sentiment,height=n / sum(n),group=sentiment)) +
+   geom_ridgeline_gradient() +
+    labs(y = "Relative frequency", x = "Page",
+         title = "Sentiment analysis of FCA Glassdoor Reviews",
+         subtitle = "Using the nrc lexicon")+theme_bw()+
+ scale_fill_viridis(discrete = TRUE, direction = -1) +
+   scale_y_continuous(labels = scales::percent)
+#expand x and y limits  
+#expand_limits(x=c(0,160), y=c(0, 0.0005))
+
+```
+
+
+
 ```{r}
 FCA_sentiment %>%
     count(page, page_total, sentiment) %>%
@@ -224,6 +278,30 @@ labs(y = "Average AFINN sentiment score", x = "Page",
          title = "Sentiment analysis of FCA Glassdoor Reviews",
          subtitle = "Using the affin lexicon")
 ```
+
+
+
+```{r}
+tidy_FCA %>%
+  inner_join(get_sentiments("afinn")) %>%
+  group_by(page) %>%
+  summarize(average_sentiment = mean(score), words = n()) %>%
+ # filter(words >= 5) %>%
+  ggplot(aes(page, average_sentiment)) +
+  
+   geom_line( )+
+    theme_minimal()+
+    geom_ridgeline_gradient(aes(y=0,height=average_sentiment,fill=average_sentiment),min_height=-3)+
+    scale_fill_viridis(option="C",limit=c(-3,4))+
+  
+  #geom_line() +
+  geom_hline(color = "red", lty = 2, yintercept = 0) +
+labs(y = "Average AFINN sentiment score", x = "Page",
+         title = "Sentiment analysis of FCA Glassdoor Reviews",
+         subtitle = "Using the affin lexicon")
+```
+
+
 
 
 
@@ -319,6 +397,11 @@ theme_tq()+xlim(c(-5,5))
 
 
 
+
+
+
+
+
 ```{r}
 FCA_sentiment %>%
     count(sentiment, word) %>%
@@ -347,6 +430,39 @@ FCA_sentiment %>%
         theme(axis.text.x=element_blank())+
   theme_minimal(base_size = 13)
 ```
+
+
+
+```{r}
+FCA_sentiment %>%
+    count(sentiment, word) %>%
+    group_by(sentiment) %>%
+    top_n(15) %>%
+    ungroup %>%
+    mutate(word = reorder(word, n)) %>%
+   mutate(sentiment = as.factor(sentiment))  %>%
+    ggplot(aes(word, n, fill = sentiment)) +
+    geom_col(alpha = 0.8, show.legend = FALSE) +
+    coord_flip() +
+    scale_y_continuous(expand = c(0,0)) +
+    facet_wrap(~sentiment,scales="free") +
+   labs(y = "Total number of occurrences", x = "",
+         title = "Sentiment analysis of FCA Glassdoor Reviews",
+         subtitle = "Using the bing lexicon")+
+#scale_fill_manual(values=viridis_pal(option = "D")(8))+
+ scale_fill_viridis(end = 0.75, discrete=TRUE, direction = -1) +
+        scale_x_discrete(expand=c(0.02,0)) +
+        theme(strip.text=element_text(hjust=0)) +
+  # change text into italics
+        theme(strip.text = element_text(face = "italic")) +
+  # strip horizontal  axis labels
+        theme(axis.title.x=element_blank()) +
+        theme(axis.ticks.x=element_blank()) +
+        theme(axis.text.x=element_blank())+
+  theme_minimal(base_size = 13)
+```
+
+
 
 
 ```{r}

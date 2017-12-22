@@ -641,7 +641,7 @@ str_length(some_factor)
 ```
 
 
-####Substring with str sub()
+#### Substring with str sub()
 str_sub(string, start = 1L, end = -1L)
 
 ```{r}
@@ -727,7 +727,7 @@ lorem
 
 
 
-####Duplication with str dup()
+#### Duplication with str dup()
 str_dup(string, times)
 
 ```{r}
@@ -814,7 +814,7 @@ str_trim(bad_text, side = "both")
 ```
 
 
-####Word extraction with word()
+#### Word extraction with word()
 
  word(string, start = 1L, end = start, sep = fixed(" "))
  
@@ -837,7 +837,20 @@ word(change, 2, -1)
 ```
 
 
-####Regular Expressions 
+
+```{r}
+colours <- c("red", "orange", "yellow", "green", "blue", "purple")
+colour_match <- str_c(colours, collapse = "|")
+colour_match
+has_colour <- str_subset(sentences, colour_match)
+matches <- str_extract(has_colour, colour_match)
+head(matches)
+
+str_extract_all(more, colour_match)
+```
+
+
+#### Regular Expressions 
 #### Replacing unwanted characters in a string
 
 
@@ -880,6 +893,20 @@ i{n,}	i occures >= n times
 [:space:]	Space characters: tab, newline, vertical tab, form feed, carriage return, space
 [:upper:]	Upper-case letters in the current locale
 [:xdigit:]	Hexadecimal digits: 0 1 2 3 4 5 6 7 8 9 A B C D E F a b c d e f
+\\d: matches any digit.
+\\s: matches any whitespace (e.g. space, tab, newline).
+[abc]: matches a, b, or c.
+[^abc]: matches anything except a, b, or c.
+
+#### repetitions
+?: 0 or 1
++: 1 or more
+*: 0 or more
+
+{n}: exactly n
+{n,}: n or more
+{,m}: at most m
+{n,m}: between n and m
 
 ```{r}
 # string
@@ -887,6 +914,33 @@ money = "$money"
 # the right way in R
 sub(pattern = "\\$", replacement = "", x = money)
 ```
+
+
+
+```{r}
+x <- "1888 is the longest year in Roman numerals: MDCCCLXXXVIII"
+str_view(x, "CC?")
+
+str_view(x, "CC+")
+
+str_view(x, 'C[LX]+')
+
+
+str_view(x, "C{2}")
+
+str_view(x, "C{2,}")
+
+str_view(x, "C{2,3}")
+
+
+str_view(x, 'C{2,3}?')
+#1888 is the longest year in Roman numerals: MDCCCLXXXVIII
+str_view(x, 'C[LX]+?')
+```
+
+
+
+
 
 ```{r}
 # dollar
@@ -958,6 +1012,8 @@ sub("\\D", "_", "the dandelion war 2010")
 gsub("\\D", "_", "the dandelion war 2010")
 ```
 
+
+
 ####Spaces and non-spaces
 
 ```{r}
@@ -1001,10 +1057,31 @@ gsub("\\W", "_", "the dandelion war 2010")
 ```
 
 
+```{r}
+noun <- "(a|the) ([^ ]+)"
+
+has_noun <- sentences %>%
+  str_subset(noun) %>%
+  head(10)
+has_noun %>% 
+  str_extract(noun)
 
 
-####Character Classes -regex character classes
-#### matching patterns
+
+```
+
+
+```{r}
+tibble(sentence = sentences) %>% 
+  tidyr::extract(
+    sentence, c("article", "noun"), "(a|the) ([^ ]+)", 
+    remove = FALSE
+  )
+```
+
+
+#### Character Classes -regex character classes
+####  matching patterns
 
 ```{r}
 # some string
@@ -1029,7 +1106,7 @@ grep(pattern = "[^0-9]", numerics, value = TRUE)
 ```
 
 
-####POSIX Character Classes
+#### POSIX Character Classes
 
 ```{r}
 # la vie (string)
@@ -1159,7 +1236,7 @@ grep(pattern = "t{2}", people, value = TRUE)
 
 
 
-####Regex functions in stringr
+#### Regex functions in stringr
 
 ```{r}
 #Function          Description
@@ -1179,7 +1256,7 @@ grep(pattern = "t{2}", people, value = TRUE)
 the important things to keep in mind is that all pattern matching functions in stringr have the following general form:
 str_function(string, pattern)
 
-####Complementary matching functions
+#### Complementary matching functions
 ```{r}
 # Function        Purpose                             Characteristic
 # regmatches()     extract or replace matches          use with data from regexpr(), #                                                              gregexpr() or regexec()
@@ -1194,7 +1271,7 @@ str_function(string, pattern)
 
 
 
-####Accessory functions accepting regex patterns
+#### Accessory functions accepting regex patterns
 
 ```{r}
 # Function     Description
@@ -1275,7 +1352,7 @@ regexpr("one", text)
 At first glance the output from regexpr() may look a bit messy but it’s very simple to interpret. What we have in the output are three displayed elements. The first element is an integer vector of the same length as text giving the starting positions of the first match. In this example the number 1 indicates that the pattern "one" starts at the position 1 of the first element in text. The negative index -1 means that there was no match; the number 11 indicates the position of the substring that was matched in the fourth element of text.
 The attribute "match.length" gives us the length of the match in each element of text. Again, a negative value of -1 means that there was no match in that element. Finally, the attribute "useBytes" has a value of TRUE which means that the matching was done byte-by-byte rather than character-by-character.
 
-####Function gregexpr()
+#### Function gregexpr()
 The function gregexpr() does practically the same thing as regexpr(): identify where a pattern is within a string vector, by searching each element separately. The only difference is that gregexpr() has an output in the form of a list. In other words, gregexpr() returns a list of the same length as text, each element of which is of the same form as the return value for regexpr(), except that the starting positions of every (disjoint) match are given.
 
 
@@ -1294,7 +1371,7 @@ gregexpr(pat, text)
 
 
 
-####Function regexec()
+#### Function regexec()
 The function regexec() is very close to gregexpr() in the sense that the output is also a list of the same length as text. Each element of the list contains the starting position of the match. A value of -1 reflects that there is no match. In addition, each element of the list has the attribute "match.length" giving the lengths of the matches (or -1 for no match):
 
 
@@ -1325,7 +1402,7 @@ regexpr(pat, c(text, NA))
 
 
 
-####Pattern Replacement Functions
+#### Pattern Replacement Functions
 Sometimes finding a pattern in a given string vector is all we want. However, there are occasions in which we might also be interested in replacing one pattern with another one. For this purpose we can use the substitution functions sub() and gsub(). The difference between sub() and gsub() is that the former replaces only the first occurrence of a pattern whereas the latter replaces all occurrences.
 The replacement functions require three main arguments: a regex pattern to be matched, a replacement for the matched pattern, and the text where matches are sought. The basic usage is:
  sub(pattern, replacement, text)
@@ -1363,7 +1440,7 @@ gsub("R", "RR", Rstring)
 ```
 
 
-####Splitting Character Vectors
+#### Splitting Character Vectors
 Besides the operations of finding patterns and replacing patterns, another common task is splitting a string based on a pattern. To do this R comes with the function strsplit() which is designed to split the elements of a character vector into substrings according to regex matches.
 If you check the help documentation —help(strsplit)— you will see that the basic usage of strsplit() requires two main arguments:
  strsplit(x, split)
@@ -1388,12 +1465,12 @@ strsplit(tels, "-")
 ```
 
 
-####Functions in stringr
+#### Functions in stringr
 In the previous chapter we briefly presented the functions of the R package stringr for regular expressions. As we mentioned, all the stringr functions share a common usage structure:
  str_function(string, pattern)
 The main two arguments are: a string vector to be processed , and a single pattern (i.e. regular expression) to match. Moreover, all the function names begin with the prefix str , followed by the name of the action to be performed. For example, to locate the position of the first occurence, we should use str locate(); to locate the positions of all matches we should use str locate all()
 
-####Detecting patterns with str detect()
+#### Detecting patterns with str detect()
 For detecting whether a pattern is present (or absent) in a string vector, we can use the
 function str detect(). Actually, this function is a wraper of grepl():
 ```{r}
@@ -1422,7 +1499,43 @@ str_detect(strings, dates)
 
 ```
 
+```{r}
+x <- c("Apple", "Banana", "Pear")
+str_sub(x, 1, 3)
+str_to_lower(str_sub(x, 1, 1))
+str_sub(x, 1, 1) <- str_to_lower(str_sub(x, 1, 1))
+x
+str_view(x, ".a.")
+```
 
+
+```{r}
+# To create the regular expression, we need \\
+dot <- "\\."
+
+# But the expression itself only contains one:
+writeLines(dot)
+#> \.
+
+# And this tells R to look for an explicit .
+str_view(c("abc", "a.c", "bef"), "a\\.c")
+
+
+x <- "a\\b"
+writeLines(x)
+#> a\b
+
+str_view(x, "\\\\")
+
+
+```
+
+```{r}
+x <- c("apple", "banana", "pear")
+str_view(x, "^a")
+str_view(x, "a$")
+
+```
 
 #### Extract first match with str extract()
 For extracting a string containing a pattern, we can use the function str extract(). In fact, this function extracts the first piece of a string that matches a given pattern. For example, imagine that we have a character vector with some tweets about Paris, and that we want to extract the hashtags. We can do this simply by defining a #hashtag pattern like #[a-zA-Z]{1}
@@ -1446,7 +1559,7 @@ str_extract(paris_tweets, hash)
 
 
 
-####Extract all matches with str extract all()
+#### Extract all matches with str extract all()
 In addition to str extract(), stringr also provides the function str extract all(). As its name indicates, we use str extract all() to extract all patterns in a vector string. Taking the same string as in the previous example, we can extract all the hashtag matches like so:
 
 
@@ -1454,6 +1567,42 @@ In addition to str extract(), stringr also provides the function str extract all
 # extract (all) hashtags
 str_extract_all(paris_tweets, "#[a-zA-Z]{1,}")
 ```
+
+
+```{r}
+x <- c(" Mr. Bean bought 2 tickets 2-613-213-4567 or 5555555555 call either one",
+  "43 Butter Rd, Brossard QC K0A 3P0 – 613 213 4567", 
+  "Please contact Mr. Bean (613)2134567",
+  "1.575.555.5555 is his #1 number",  
+  "7164347566"
+)
+
+pt="(^| )[0-9.() -]{5,}( |$)"
+pt1="\\(?\\d{3}\\)?[.-]? *\\d{3}[.-]? *[.-]?\\d{4}"
+
+phone <- "([2-9][0-9]{2})[- .]([0-9]{3})[- .]([0-9]{4})"
+
+str_extract_all(x, pt)
+str_extract_all(x, pt1)
+
+str_extract_all(x, phone)
+
+str_subset(x, phone)
+
+str_match_all(x, pt1)
+```
+
+```{r}
+
+
+string<-c("Posted 69 months ago (7/4/2011)","2017-12-21 is todays date")
+
+gsub( ".*(\\d{1,2}/\\d{1,2}/\\d{4}).*", "\\1", string)
+ 
+ str_extract(string, "(?<=[(])[^)]+")
+```
+
+
 
 ####Extract first match group with str match()
 Closely related to str extract() the package stringr offers another extracting function:
@@ -1493,6 +1642,22 @@ str_match_all(paris_tweets, "#[a-zA-Z]{1,}")
 
 
 ```
+
+comments = TRUE allows you to use comments and white space to make complex regular expressions more understandable. Spaces are ignored, as is everything after #. To match a literal space, you’ll need to escape it: "\\ ".
+```{r}
+phone <- regex("
+  \\(?     # optional opening parens
+  (\\d{3}) # area code
+  [)- ]?   # optional closing parens, dash, or space
+  (\\d{3}) # another three numbers
+  [ -]?    # optional space or dash
+  (\\d{3}) # three more numbers
+  ", comments = TRUE)
+
+str_match("514-791-8141", phone)
+```
+
+
 
 ####Locate first match with str locate()
 Besides detecting, extracting and matching regex patterns, stringr allows us to locate oc- curences of patterns. For locating the position of the first occurence of a pattern in a string vector, we should use str locate().
@@ -1564,7 +1729,43 @@ str_replace_all(cities, pattern = "[^aeiou]", ";")
 
 ```
 
-####String splitting with str split()
+```{r}
+x <- c("1 house", "2 cars", "3 people")
+str_replace_all(x, c("1" = "one", "2" = "two", "3" = "three"))
+```
+
+Instead of replacing with a fixed string you can use backreferences to insert components of the match. In the following code, I flip the order of the second and third words.
+
+```{r}
+sentences %>% 
+  str_replace("([^ ]+) ([^ ]+) ([^ ]+)", "\\1 \\3 \\2") %>% 
+  head(5)
+```
+
+```{r}
+x <- "This is a sentence."
+str_view_all(x, boundary("word"))
+
+str_extract_all(x, boundary("word"))
+
+```
+
+
+```{r}
+# To create the regular expression, we need \\
+dot <- "\\."
+
+# But the expression itself only contains one:
+writeLines(dot)
+#> \.
+
+# And this tells R to look for an explicit .
+str_extract(c("abc", "a.c", "bef"), "a\\.c")
+#> [1] NA    "a.c" NA
+```
+
+
+#### String splitting with str split()
 Similar to strsplit(), stringr gives us the function str split() to separate a character
 vector into a number of pieces. This function has the following usage:
 str_split(string, pattern, n = Inf)
@@ -1591,6 +1792,57 @@ tels = c("510-548-2238", "707-231-2440", "650-752-1300")
 
 # split each number into its portions
 str_split(tels, "-")
+
+```
+
+```{r}
+"a|b|c|d" %>% 
+  str_split("\\|") %>% 
+  .[[1]]
+```
+
+```{r}
+sentences %>%
+  head(5) %>% 
+  str_split(" ", simplify = TRUE)%>%head(5)
+```
+
+
+You can also request a maximum number of pieces:
+```{r}
+fields <- c("Name: Hadley", "Country: NZ", "Age: 35")
+fields %>% str_split(": ", n = 2, simplify = TRUE)
+```
+
+
+
+```{r}
+x <- "This is a sentence.  This is another sentence."
+str_view_all(x, boundary("word"))
+```
+
+
+```{r}
+str_split(x, " ")[[1]]
+
+str_split(x, boundary("word"))[[1]]
+```
+
+
+
+```{r}
+bananas <- c("banana", "Banana", "BANANA")
+str_view(bananas, "banana")
+str_view(bananas, regex("banana", ignore_case = TRUE))
+```
+
+multiline = TRUE allows ^ and $ to match the start and end of each line rather than the start and end of the complete string.
+
+```{r}
+x <- "Line 1\nLine 2\nLine 3"
+str_extract_all(x, "^Line")[[1]]
+
+str_extract_all(x, regex("^Line", multiline = TRUE))[[1]]
 
 ```
 
@@ -1621,7 +1873,7 @@ str_split(flavors, "[aeiou]", n = 2)
 
 
 
-####String splitting with str split fixed()
+#### String splitting with str split fixed()
 In addition to str split(), there is also the str split fixed() function that splits up a
 string into a fixed number of pieces. Its usage has the following form:
 str_split_fixed(string, pattern, n)
@@ -1807,6 +2059,26 @@ emails = c(
 str_detect(string=emails, pattern=email_pat)
 ```
 
+
+
+```{r}
+library(microbenchmark)
+microbenchmark(
+  fixed = str_detect(sentences, fixed("the")),
+  regex = str_detect(sentences, "the"),
+  times = 20
+)
+
+str_detect(sentences, fixed("the"))%>%head()
+str_detect(sentences, "the")%>%head()
+
+
+```
+
+
+```{r}
+stringi::stri_locale_info()
+```
 
 
 ####Matching HTML elements
@@ -2014,3 +2286,343 @@ df1
 df2
 ```
 
+
+
+
+Regular expressions
+Regular expressions are a concise and flexible tool for describing patterns in strings. This vignette describes the key features of stringr’s regular expressions, as implemented by stringi. It is not a tutorial, so if you’re unfamiliar regular expressions, I’d recommend starting at http://r4ds.had.co.nz/strings.html. If you want to master the details, I’d recommend reading the classic Mastering Regular Expressions by Jeffrey E. F. Fried.
+
+Regular expressions are the default pattern engine in stringr. That means when you use a pattern matching function with a bare string, it’s equivalent to wrapping it in a call to regex():
+
+# The regular call:
+str_extract(fruit, "nana")
+# Is shorthand for
+str_extract(fruit, regex("nana"))
+You will need to use regex() explicitly if you want to override the default options, as you’ll see in examples below.
+
+Basic matches
+The simplest patterns match exact strings:
+
+x <- c("apple", "banana", "pear")
+str_extract(x, "an")
+#> [1] NA   "an" NA
+You can perform a case-insensitive match using ignore_case = TRUE:
+
+bananas <- c("banana", "Banana", "BANANA")
+str_detect(bananas, "banana")
+#> [1]  TRUE FALSE FALSE
+str_detect(bananas, regex("banana", ignore_case = TRUE))
+#> [1] TRUE TRUE TRUE
+The next step up in complexity is ., which matches any character except a newline:
+
+str_extract(x, ".a.")
+#> [1] NA    "ban" "ear"
+You can allow . to match everything, including \n, by setting dotall = TRUE:
+
+str_detect("\nX\n", ".X.")
+#> [1] FALSE
+str_detect("\nX\n", regex(".X.", dotall = TRUE))
+#> [1] TRUE
+Escaping
+If “.” matches any character, how do you match a literal “.”? You need to use an “escape” to tell the regular expression you want to match it exactly, not use its special behaviour. Like strings, regexps use the backslash, \, to escape special behaviour. So to match an ., you need the regexp \.. Unfortunately this creates a problem. We use strings to represent regular expressions, and \ is also used as an escape symbol in strings. So to create the regular expression \. we need the string "\\.".
+
+# To create the regular expression, we need \\
+dot <- "\\."
+
+# But the expression itself only contains one:
+writeLines(dot)
+#> \.
+
+# And this tells R to look for an explicit .
+str_extract(c("abc", "a.c", "bef"), "a\\.c")
+#> [1] NA    "a.c" NA
+If \ is used as an escape character in regular expressions, how do you match a literal \? Well you need to escape it, creating the regular expression \\. To create that regular expression, you need to use a string, which also needs to escape \. That means to match a literal \ you need to write "\\\\" — you need four backslashes to match one!
+
+x <- "a\\b"
+writeLines(x)
+#> a\b
+
+str_extract(x, "\\\\")
+#> [1] "\\"
+In this vignette, I use \. to denote the regular expression, and "\\." to denote the string that represents the regular expression.
+
+An alternative quoting mechanism is \Q...\E: all the characters in ... are treated as exact matches. This is useful if you want to exactly match user input as part of a regular expression.
+
+x <- c("a.b.c.d", "aeb")
+starts_with <- "a.b"
+
+str_detect(x, paste0("^", starts_with))
+#> [1] TRUE TRUE
+str_detect(x, paste0("^\\Q", starts_with, "\\E"))
+#> [1]  TRUE FALSE
+Special characters
+Escapes also allow you to specify individual characters that are otherwise hard to type. You can specify individual unicode characters in five ways, either as a variable number of hex digits (four is most common), or by name:
+
+\xhh: 2 hex digits.
+
+\x{hhhh}: 1-6 hex digits.
+
+\uhhhh: 4 hex digits.
+
+\Uhhhhhhhh: 8 hex digits.
+
+\N{name}, e.g. \N{grinning face} matches the basic smiling emoji.
+
+Similarly, you can specify many common control characters:
+
+\a: bell.
+
+\cX: match a control-X character.
+
+\e: escape (\u001B).
+
+\f: form feed (\u000C).
+
+\n: line feed (\u000A).
+
+\r: carriage return (\u000D).
+
+\t: horizontal tabulation (\u0009).
+
+\0ooo match an octal character. ‘ooo’ is from one to three octal digits, from 000 to 0377. The leading zero is required.
+
+(Many of these are only of historical interest and are only included here for the sake of completeness.)
+
+Matching multiple characters
+There are a number of patterns that match more than one character. You’ve already seen ., which matches any character (except a newline). A closely related operator is \X, which matches a grapheme cluster, a set of individual elements that form a single symbol. For example, one way of representing “á” is as the letter “a” plus an accent: . will match the component “a”, while \X will match the complete symbol:
+
+x <- "a\u0301"
+str_extract(x, ".")
+#> [1] "a"
+str_extract(x, "\\X")
+#> [1] "á"
+There are five other escaped pairs that match narrower classes of characters:
+
+\d: matches any digit. The complement, \D, matches any character that is not a decimal digit.
+
+str_extract_all("1 + 2 = 3", "\\d+")[[1]]
+#> [1] "1" "2" "3"
+Technically, \d includes any character in the Unicode Category of Nd (“Number, Decimal Digit”), which also includes numeric symbols from other languages:
+
+# Some Laotian numbers
+str_detect("១២៣", "\\d")
+#> [1] TRUE
+\s: matches any whitespace. This includes tabs, newlines, form feeds, and any character in the Unicode Z Category (which includes a variety of space characters and other separators.). The complement, \S, matches any non-whitespace character.
+
+(text <- "Some  \t badly\n\t\tspaced \f text")
+#> [1] "Some  \t badly\n\t\tspaced \f text"
+str_replace_all(text, "\\s+", " ")
+#> [1] "Some badly spaced text"
+\p{property name} matches any character with specific unicode property, like \p{Uppercase} or \p{Diacritic}. The complement, \P{property name}, matches all characters without the property. A complete list of unicode properties can be found at http://www.unicode.org/reports/tr44/#Property_Index.
+
+(text <- c('"Double quotes"', "«Guillemet»", "“Fancy quotes”"))
+#> [1] "\"Double quotes\"" "«Guillemet»"       "“Fancy quotes”"
+str_replace_all(text, "\\p{quotation mark}", "'")
+#> [1] "'Double quotes'" "'Guillemet'"     "'Fancy quotes'"
+\w matches any “word” character, which includes alphabetic characters, marks and decimal numbers. The complement, \W, matches any non-word character.
+
+str_extract_all("Don't eat that!", "\\w+")[[1]]
+#> [1] "Don"  "t"    "eat"  "that"
+str_split("Don't eat that!", "\\W")[[1]]
+#> [1] "Don"  "t"    "eat"  "that" ""
+Technically, \w also matches connector punctuation, \u200c (zero width connector), and \u200d (zero width joiner), but these are rarely seen in the wild.
+
+\b matches word boundaries, the transition between word and non-word characters. \B matches the opposite: boundaries that have either both word or non-word characters on either side.
+
+str_replace_all("The quick brown fox", "\\b", "_")
+#> [1] "_The_ _quick_ _brown_ _fox_"
+str_replace_all("The quick brown fox", "\\B", "_")
+#> [1] "T_h_e q_u_i_c_k b_r_o_w_n f_o_x"
+You can also create your own character classes using []:
+
+[abc]: matches a, b, or c.
+[a-z]: matches every character between a and z (in Unicode code point order).
+[^abc]: matches anything except a, b, or c.
+[\^\-]: matches - or \.
+There are a number of pre-built classes that you can use inside []:
+
+[:punct:]: punctuation.
+[:alpha:]: letters.
+[:lower:]: lowercase letters.
+[:upper:]: upperclass letters.
+[:digit:]: digits.
+[:xdigit:]: hex digits.
+[:alnum:]: letters and numbers.
+[:cntrl:]: control characters.
+[:graph:]: letters, numbers, and punctuation.
+[:print:]: letters, numbers, punctuation, and whitespace.
+[:space:]: space characters (basically equivalent to \s).
+[:blank:]: space and tab.
+These all go inside the [] for character classes, i.e. [[:digit:]AX] matches all digits, A, and X.
+
+You can also using Unicode properties, like [\p{Letter}], and various set operations, like [\p{Letter}--\p{script=latin}]. See ?"stringi-search-charclass" for details.
+
+Alternation
+| is the alternation operator, which will pick between one or more possible matches. For example, abc|def will match abc or def.
+
+str_detect(c("abc", "def", "ghi"), "abc|def")
+#> [1]  TRUE  TRUE FALSE
+Note that the precedence for | is low, so that abc|def matches abc or def not abcyz or abxyz.
+
+Grouping
+You can use parentheses to override the default precedence rules:
+
+str_extract(c("grey", "gray"), "gre|ay")
+#> [1] "gre" "ay"
+str_extract(c("grey", "gray"), "gr(e|a)y")
+#> [1] "grey" "gray"
+Parenthesis also define “groups” that you can refer to with backreferences, like \1, \2 etc, and can be extracted with str_match(). For example, the following regular expression finds all fruits that have a repeated pair of letters:
+
+pattern <- "(..)\\1"
+fruit %>% 
+  str_subset(pattern)
+#> [1] "banana"      "coconut"     "cucumber"    "jujube"      "papaya"     
+#> [6] "salal berry"
+
+fruit %>% 
+  str_subset(pattern) %>% 
+  str_match(pattern)
+#>      [,1]   [,2]
+#> [1,] "anan" "an"
+#> [2,] "coco" "co"
+#> [3,] "cucu" "cu"
+#> [4,] "juju" "ju"
+#> [5,] "papa" "pa"
+#> [6,] "alal" "al"
+You can use (?:...), the non-grouping parentheses, to control precedence but not capture the match in a group. This is slightly more efficient than capturing parentheses.
+
+str_match(c("grey", "gray"), "gr(e|a)y")
+#>      [,1]   [,2]
+#> [1,] "grey" "e" 
+#> [2,] "gray" "a"
+str_match(c("grey", "gray"), "gr(?:e|a)y")
+#>      [,1]  
+#> [1,] "grey"
+#> [2,] "gray"
+This is most useful for more complex cases where you need to capture matches and control precedence independently.
+
+Anchors
+By default, regular expressions will match any part of a string. It’s often useful to anchor the regular expression so that it matches from the start or end of the string:
+
+^ matches the start of string.
+$ matches the end of the string.
+x <- c("apple", "banana", "pear")
+str_extract(x, "^a")
+#> [1] "a" NA  NA
+str_extract(x, "a$")
+#> [1] NA  "a" NA
+To match a literal “$” or “^”, you need to escape them, \$, and \^.
+
+For multiline strings, you can use regex(multiline = TRUE). This changes the behaviour of ^ and $, and introduces three new operators:
+
+^ now matches the start of each line.
+
+$ now matches the end of each line.
+
+\A matches the start of the input.
+
+\z matches the end of the input.
+
+\Z matches the end of the input, but before the final line terminator, if it exists.
+
+x <- "Line 1\nLine 2\nLine 3\n"
+str_extract_all(x, "^Line..")[[1]]
+#> [1] "Line 1"
+str_extract_all(x, regex("^Line..", multiline = TRUE))[[1]]
+#> [1] "Line 1" "Line 2" "Line 3"
+str_extract_all(x, regex("\\ALine..", multiline = TRUE))[[1]]
+#> [1] "Line 1"
+Repetition
+You can control how many times a pattern matches with the repetition operators:
+
+?: 0 or 1.
++: 1 or more.
+*: 0 or more.
+x <- "1888 is the longest year in Roman numerals: MDCCCLXXXVIII"
+str_extract(x, "CC?")
+#> [1] "CC"
+str_extract(x, "CC+")
+#> [1] "CCC"
+str_extract(x, 'C[LX]+')
+#> [1] "CLXXX"
+Note that the precedence of these operators is high, so you can write: colou?r to match either American or British spellings. That means most uses will need parentheses, like bana(na)+.
+
+You can also specify the number of matches precisely:
+
+{n}: exactly n
+{n,}: n or more
+{n,m}: between n and m
+str_extract(x, "C{2}")
+#> [1] "CC"
+str_extract(x, "C{2,}")
+#> [1] "CCC"
+str_extract(x, "C{2,3}")
+#> [1] "CCC"
+By default these matches are “greedy”: they will match the longest string possible. You can make them “lazy”, matching the shortest string possible by putting a ? after them:
+
+??: 0 or 1, prefer 0.
++?: 1 or more, match as few times as possible.
+*?: 0 or more, match as few times as possible.
+{n,}?: n or more, match as few times as possible.
+{n,m}?: between n and m, , match as few times as possible, but at least n.
+str_extract(x, c("C{2,3}", "C{2,3}?"))
+#> [1] "CCC" "CC"
+str_extract(x, c("C[LX]+", "C[LX]+?"))
+#> [1] "CLXXX" "CL"
+You can also make the matches possessive, which means that if later parts of the match fail, the repetition will not be re-tried with a smaller number of characters. This is an advanced feature used to improve performance in worst-case scenarios (called “catastrophic backtracking”).
+
+??: 0 or 1, possessive.
++?: 1 or more, possessive.
+*?: 0 or more, possessive.
+{n}?: exactly n, possessive.
+{n,}?: n or more, possessive.
+{n,m}?: between n and m, possessive.
+A related concept is the atomic-match parenthesis, (?>...). If a later match fails and the engine needs to back-track, an atomic match is kept as is: it succeeds or fails as a whole. Compare the following two regular expressions:
+
+str_detect("ABC", "(?>A|.B)C")
+#> [1] FALSE
+str_detect("ABC", "(?:A|.B)C")
+#> [1] TRUE
+The atomic match fails because it matches A, and then the next character is a C so it fails. The regular match suceeds because it matches A, but then C doesn’t match, so it back-tracks and tries B instead.
+
+Look arounds
+These assertions look ahead or behind the current match without “consuming” any characters (i.e. changing the input position).
+
+(?=...): positive look-ahead assertion. Matches if ... matches at the current input.
+
+(?!...): negative look-ahead assertion. Matches if ... does not matche at the current input.
+
+(?<=...): positive look-behind assertion. Matches if ... matches text preceding the current position, with the last character of the match being the character just before the current position. Length must be bounded
+(i.e. no * or +).
+
+(?<!...): negative look-behind assertion. Matches if ... does not match text preceding the current position. Length must be bounded
+(i.e. no * or +).
+
+These are useful when you want to check that a pattern exists, but you don’t want to include it in the result:
+
+x <- c("1 piece", "2 pieces", "3")
+str_extract(x, "\\d+(?= pieces?)")
+#> [1] "1" "2" NA
+
+y <- c("100", "$400")
+str_extract(y, "(?<=\\$)\\d+")
+#> [1] NA    "400"
+Comments
+There are two ways to include comments in a regular expression. The first is with (?#...):
+
+str_detect("xyz", "x(?#this is a comment)")
+#> [1] TRUE
+The second is to use regex(comments = TRUE). This form ignores spaces and newlines, and anything everything after #. To match a literal space, you’ll need to escape it: "\\ ". This is a useful way of describing complex regular expressions:
+
+phone <- regex("
+  \\(?     # optional opening parens
+  (\\d{3}) # area code
+  [)- ]?   # optional closing parens, dash, or space
+  (\\d{3}) # another three numbers
+  [ -]?    # optional space or dash
+  (\\d{3}) # three more numbers
+  ", comments = TRUE)
+
+str_match("514-791-8141", phone)
+#>      [,1]          [,2]  [,3]  [,4] 
+#> [1,] "514-791-814" "514" "791" "814"

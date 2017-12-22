@@ -1,6 +1,10 @@
 ---
 title: "Tidytext"
 output: html_notebook
+author: Nana Boateng
+df_print: paged
+Time: '`r Sys.time()`'
+date: "`r format(Sys.time(), '%B %d, %Y')`"
 ---
 
 
