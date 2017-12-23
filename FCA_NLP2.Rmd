@@ -48,6 +48,8 @@ n=155
 
 #The reviews has 155 pages,thus n=155
 
+
+
 FCA_urls <- paste0("https://www.glassdoor.com/Reviews/FCA-Fiat-Chrysler-Automobiles-Reviews-E149_P",seq(2, n), ".htm")
 FCA_urls<-c("https://www.glassdoor.com/Reviews/FCA-Fiat-Chrysler-Automobiles-Reviews-E149.htm",FCA_urls)
 
@@ -484,7 +486,7 @@ FCA_sentiment %>%
 
 
 
-
+The count most common positive and negative sentiment  is displayed graphicaly below.
 
 ```{r}
 bing_word_counts <-tidy_FCA %>%
@@ -502,7 +504,7 @@ bing_word_counts %>%
   ggplot(aes(word, n, fill = sentiment)) +
   geom_bar(stat = "identity") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  ylab("Contribution to sentiment")+
+  labs(y="Contribution to sentiment",title="bing sentiments")+
 #scale_fill_manual(values=viridis_pal(option = "D")(2))
  scale_fill_viridis(end = 0.85, discrete=TRUE, direction = 1)
 
@@ -601,7 +603,7 @@ frequencies
 ```{r}
 
 findFreqTerms(frequencies, lowfreq=100)
-#%>%as_tibble()%>%top_n(10)
+
 ```
 
 Remove sparse terms
@@ -629,28 +631,8 @@ findAssocs(frequencies, c("love","poor","flexible","horrible"), c(0.6,0.6,0.6,0.
 ### High Frequency Words
 The most commonly words used in the reviews is plotted below.
 
-```{r}
-v <-sort(rowSums(tdm),decreasing=TRUE)
-d <-data_frame(word = names(v),freq=v) %>%mutate(word = reorder(word, freq))
-head(d, 10)
-
-wordcloud(words = d$word, freq = d$freq, min.freq = 3,
-          max.words=200, random.order=FALSE, rot.per=0.35, 
-          colors=brewer.pal(8, "Dark2"))
-
-d=d[1:20,]
-ggplot(d, aes(x=word,y=freq,fill="")) + 
- geom_bar(stat="identity")+theme_bw()+
-  theme(axis.text.x =element_text(angle =45,hjust = 1))+
-#scale_fill_viridis(end = 0.85, discrete=TRUE, direction = 1)
-#scale_fill_manual(values=viridis_pal(option = "D")(1))
-scale_color_manual(values = palette_light()) +
-scale_fill_manual(values = palette_light())+
-  coord_flip()
-```
-
-
 ### Word Cloud with Bing Lexicon
+The most common positive and negative words are graphically depicted below.
 
 ```{r}
 
@@ -712,8 +694,9 @@ separate(word, c("word1", "word2"), sep = " ") %>%
 filter(!word1 %in% stop_words$word) %>%
 filter(!word2 %in% stop_words$word)%>%
 filter(!word1 %in% stop_user) %>%
-filter(!word2 %in% stop_user)
-
+filter(!word2 %in% stop_user)%>%
+ mutate(word1 = removeNumbers(word1))%>%
+mutate(word2 = removeNumbers(word2))
 
 
 bigram_counts=tidy_descr_ngrams %>%
@@ -731,5 +714,110 @@ arrow = a, end_cap = circle(.07, 'inches')) +
 geom_node_point(color = palette_light()[1], size = 5, alpha = 0.8) +
 geom_node_text(aes(label = name), vjust = 1, hjust = 0.5) +
 theme_void()
+```
+
+
+#### What are the most commonly used words reviews?
+The most common word is employee which suggest majority of the reviewers were either employees or ex-employees.The rest are related to management and the work environment.
+
+
+
+```{r}
+data(stop_words)
+tidy_descr<-GlassdoorPages %>%
+unnest_tokens(word, text) %>% 
+mutate(word=removeNumbers(word))%>% 
+mutate(word_stem = wordStem(word)) %>%
+anti_join(stop_words, by = "word") %>%
+filter(!word_stem %in% stop_words$word) %>%
+filter(!word_stem %in% stop_user) 
+
+
+tidy_descr %>%
+count(word_stem, sort = TRUE) %>%
+filter(n > 30) %>%
+ggplot(aes(x = reorder(word_stem, n), y = n)) +
+geom_col(color = palette_light()[1], fill = palette_light()[1], alpha = 0.8) +
+coord_flip() +
+theme_tq() +
+labs(x = "",
+y = "count of most common words",titlt="Count of most common words")
+```
+
+
+```{r}
+
+tidy_descr %>%
+count(word_stem) %>%
+mutate(word_stem = removeNumbers(word_stem)) %>%
+with(wordcloud(word_stem, n, max.words = 100, colors = palette_light()))
+
+```
+
+
+
+```{r}
+bigram_counts %>%
+ mutate(word1 = removeNumbers(word1))%>%
+mutate(word2 = removeNumbers(word2))%>% 
+filter(n > 20) %>%
+ggplot(aes(x = reorder(word1,-n), y = reorder(word2,-n), fill = n)) +
+geom_tile(alpha = 0.8, color = "white") +
+scale_fill_gradientn(colours = c(palette_light()[[1]], palette_light()[[2]])) +
+coord_flip() +
+theme_tq() +
+theme(legend.position = "right") +
+theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+labs(x = "first word in pair",
+y = "second word in pair")
+```
+
+
+```{r}
+tidy_descr_ngrams=GlassdoorPages %>%
+unnest_tokens(word, text, token = "ngrams", n = 2)%>%
+separate(word, c("word1", "word2"), sep = " ")%>%
+mutate(word1=removeNumbers(word1))%>% 
+mutate(word1 = wordStem(word1))%>%
+mutate(word2=removeNumbers(word2))%>% 
+mutate(word2 = wordStem(word2))
+
+
+
+tidy_descr_ngrams
+
+```
+
+
+
+
+```{r}
+ tidy_FCA %>%
+    inner_join(get_sentiments("bing"))%>%
+  group_by(sentiment)%>%count()%>%
+ggplot(aes(x = reorder(sentiment, n), y = n,fill=palette_light()[1])) +
+geom_col(  alpha = 0.8,width = 0.5) +
+coord_flip() +
+theme_tq()+
+labs(y="sentiments ",title="bing lexicon sentiment count" ,x="frequency")+
+  theme(legend.position="none")+
+#scale_fill_viridis(end = 0.85, discrete=TRUE, direction = 1,option = "D") 
+#scale_fill_manual(values=viridis_pal(option = "A")(2))
+scale_fill_tq()
+
+
+tidy_FCA %>%
+    inner_join(get_sentiments("nrc"))%>%
+  group_by(sentiment)%>%count()%>%
+ggplot(aes(x = reorder(sentiment, n), y = n,fill=palette_light()[1])) +
+geom_col(  alpha = 0.8) +
+coord_flip() +
+theme_tq()+
+labs(y="sentiments ",title="nrc lexicon sentiment count" ,x="frequency")+
+  theme(legend.position="none")+
+#scale_fill_viridis(end = 0.85, discrete=TRUE, direction = 1,option = "D") 
+#scale_fill_manual(values=viridis_pal(option = "A")(2))
+scale_fill_tq()
+
 ```
 

@@ -991,3 +991,44 @@ download.file(url, destfile = "scrapedpage.html", quiet=TRUE)
 content <- read_html("scrapedpage.html")
 ```
 
+
+
+```{r}
+bigrams_separated<-GlassdoorPages%>%
+unnest_tokens(word, text, token = "ngrams", n = 2) %>%
+filter(!grepl("\\.|http", word)) %>%
+separate(word, c("word1", "word2"), sep = " ") %>%
+filter(word1 == "not" | word1 == "no") %>%
+filter(!word2 %in% stop_words$word)
+
+not_words<-bigrams_separated %>%
+filter(word1 == "not") %>%
+inner_join(get_sentiments("afinn"), by = c(word2 = "word")) %>%
+count(word2, score, sort = TRUE) %>%
+ungroup()
+
+
+tidy_descr_sentiment<-tidy_descr %>%
+left_join(select(bigrams_separated, word1, word2), by = c("word" = "word2")) %>%
+inner_join(get_sentiments("nrc"), by = "word") %>%
+inner_join(get_sentiments("bing"), by = "word") %>%
+rename(nrc = sentiment.x, bing = sentiment.y) %>%
+mutate(nrc = ifelse(!is.na(word1), NA, nrc),
+bing = ifelse(!is.na(word1) & bing == "positive", "negative",
+ifelse(!is.na(word1) & bing == "negative", "positive", bing)))
+
+tidy_descr_sentiment %>%
+filter(nrc != "positive") %>%
+filter(nrc != "negative") %>%
+gather(x, y, nrc, bing) %>%
+count(x, y, sort = TRUE) %>%
+filter(n > 10) %>%
+ggplot(aes(x = reorder(y, n), y = n)) +
+facet_wrap(~ x, scales = "free") +
+geom_col(color = palette_light()[1], fill = palette_light()[1], alpha = 0.8) +
+coord_flip() +
+theme_tq() +
+labs(x = "",
+y = "count of sentiment in followers' descriptions")
+```
+
